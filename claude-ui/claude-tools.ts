@@ -396,7 +396,7 @@ export default function (pi: ExtensionAPI) {
       // Expanded (ctrl+o): show the full content via the built-in renderer,
       // like pi does natively. Collapsed stays a one-line summary.
       if (lines.length === 0 || options.expanded) {
-        return defsFor(context.cwd).read.renderResult(result, options, theme, context);
+        return defsFor(context.cwd).read.renderResult!(result, options, theme, context);
       }
       const suffix = result?.details?.truncation?.truncated ? " (truncated)" : "";
       return new LinesComponent([row(`${MUTED}⎿${C.reset}  Read ${lines.length} ${lines.length === 1 ? "line" : "lines"}${suffix}`)]);
@@ -442,11 +442,11 @@ export default function (pi: ExtensionAPI) {
       const path = context.args?.path ?? context.args?.file_path;
       const lang = typeof path === "string" ? getLanguageFromPath(path) : undefined;
       if (!diff) {
-        return defsFor(context.cwd).edit.renderResult(result, options, theme, context);
+        return defsFor(context.cwd).edit.renderResult!(result, options, theme, context);
       }
       const rows = renderUpdateResult(diff, lang, options.expanded === true);
       if (rows.length === 0) {
-        return defsFor(context.cwd).edit.renderResult(result, options, theme, context);
+        return defsFor(context.cwd).edit.renderResult!(result, options, theme, context);
       }
       return new LinesComponent(rows);
     },
