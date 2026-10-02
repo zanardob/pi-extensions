@@ -42,6 +42,14 @@ function formatCost(cost: number): string {
   return `$${cost.toFixed(cost < 0.01 ? 4 : 2)}`;
 }
 
+/** Compact context window size: 1000000 -> "1.0M", 128000 -> "128k". */
+function formatContextWindow(tokens: number | undefined): string | null {
+  if (tokens === undefined || !Number.isFinite(tokens) || tokens <= 0) return null;
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
+  if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}k`;
+  return String(tokens);
+}
+
 function formatDuration(ms: number): string {
   const seconds = Math.max(0, Math.floor(ms / 1000));
   if (seconds < 60) return "<1m";
@@ -156,6 +164,7 @@ export default function (pi: ExtensionAPI) {
 
           const context = ctx.getContextUsage();
           const percent = context?.percent ?? 0;
+          const contextWindow = formatContextWindow(context?.contextWindow ?? ctx.model?.contextWindow);
           const branch = footerData.getGitBranch();
 
           // footer* theme keys mirror ccstatusline's truecolor table so the
@@ -175,7 +184,7 @@ export default function (pi: ExtensionAPI) {
             line1Parts.push(styled("footerReason", `reason: ${Math.round(reasoningShare)}%`), "  ");
           }
           line1Parts.push(
-            styled("footerDim", `context: ${percent.toFixed(1)}%`),
+            styled("footerDim", contextWindow ? `context: ${Math.round(percent)}% / ${contextWindow}` : `context: ${Math.round(percent)}%`),
             "  ",
             styled("footerWarn", `session: ${formatDuration(Date.now() - startedAt)}`),
             "  ",
