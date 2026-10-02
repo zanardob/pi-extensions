@@ -9,6 +9,7 @@
       "./claude-ui/index.ts",
       "./voice-dictation/index.ts",
       "./usage/usage.ts",
+      "./session-name/index.ts",
       "./aliases/index.ts"
     ],
     "themes": [

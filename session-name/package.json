@@ -1,0 +1,13 @@
+{
+  "name": "pi-session-name",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Kebab-case session names: /rename generates one, sessions are auto-named after the first exchange",
+  "keywords": ["pi-package"],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "pi": {
+    "extensions": ["index.ts"]
+  }
+}
