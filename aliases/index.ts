@@ -2,7 +2,7 @@
  * Small command aliases.
  *
  * /exit   → same as /quit
- * /rename → same as /name (set or show the session display name)
+ * /rename → same as /name
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
