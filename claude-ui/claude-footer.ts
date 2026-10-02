@@ -106,6 +106,7 @@ export default function (pi: ExtensionAPI) {
       const { styled } = makeStyle(theme);
       requestRender = () => tui.requestRender();
       const unsubBranch = footerData.onBranchChange(() => tui.requestRender());
+      const unsubName = pi.events.on("session-name-changed", () => tui.requestRender());
       const interval = setInterval(() => tui.requestRender(), 30_000);
 
       // Track uncommitted line changes (+added, -removed vs HEAD), refreshed in the background.
@@ -139,6 +140,7 @@ export default function (pi: ExtensionAPI) {
         dispose: () => {
           requestRender = undefined;
           unsubBranch();
+          unsubName();
           clearInterval(interval);
           clearInterval(statsInterval);
         },
@@ -171,6 +173,7 @@ export default function (pi: ExtensionAPI) {
           const sessionStart = header?.timestamp ? Date.parse(header.timestamp) : startedAt;
           const sessionAge = Date.now() - (Number.isFinite(sessionStart) ? sessionStart : startedAt);
           const branch = footerData.getGitBranch();
+          const sessionName = pi.getSessionName();
 
           // footer* theme keys mirror ccstatusline's truecolor table so the
           // footer matches Claude Code's: model teal, ctx grey, session/cost
@@ -215,7 +218,10 @@ export default function (pi: ExtensionAPI) {
           // Extension hints live on their own line, below the git status.
           const statusLine = statuses.length > 0 ? styled("footerDim", ` ${statuses.join("  ")}`) : undefined;
 
-          const lines = [line1, line2, line3];
+          const nameLine = sessionName
+            ? styled("footerModel", ` name: ${sessionName}`)
+            : undefined;
+          const lines = nameLine ? [nameLine, line1, line2, line3] : [line1, line2, line3];
           if (statusLine) lines.push(statusLine);
           return lines.map((line) => truncateToWidth(line, width, ""));
         },
