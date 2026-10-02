@@ -12,7 +12,7 @@
       "./claude-ui/claude-uniform.ts",
       "./apple-voice/index.ts",
       "./usage/usage.ts",
-      "./exit-alias/exit-alias.ts"
+      "./aliases/index.ts"
     ],
     "themes": [
       "./claude-ui/themes/claude-dark.json",

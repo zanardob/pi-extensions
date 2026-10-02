@@ -9,7 +9,7 @@ Personal extensions for the [Pi coding agent](https://pi.dev).
 | [claude-ui](claude-ui/) | Claude-style editor, footer, tool rendering, and the `claude-light`/`claude-dark` themes |
 | [apple-voice](apple-voice/) | Push-to-talk dictation with Apple on-device or Deepgram Nova-3 engines (macOS 26+) |
 | [usage](usage/) | `/usage` dashboard: cost, tokens, and messages by provider/model |
-| [exit-alias](exit-alias/) | `/exit` as an alias for `/quit` |
+| [aliases](aliases/) | Command aliases: `/exit` for `/quit`, `/rename` for `/name` |
 
 ## Install
 

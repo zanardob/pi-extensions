@@ -11,12 +11,12 @@
     "types": ["node"]
   },
   "files": [
+    "aliases/index.ts",
     "apple-voice/index.ts",
     "claude-ui/claude-editor.ts",
     "claude-ui/claude-footer.ts",
     "claude-ui/claude-tools.ts",
     "claude-ui/claude-uniform.ts",
-    "exit-alias/exit-alias.ts",
     "usage/usage.ts"
   ]
 }
