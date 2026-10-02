@@ -165,6 +165,11 @@ export default function (pi: ExtensionAPI) {
           const context = ctx.getContextUsage();
           const percent = context?.percent ?? 0;
           const contextWindow = formatContextWindow(context?.contextWindow ?? ctx.model?.contextWindow);
+          // True session age from the session file header (survives reloads and
+          // resumes). `startedAt` is only the fallback for sessions without a file yet.
+          const header = ctx.sessionManager.getHeader();
+          const sessionStart = header?.timestamp ? Date.parse(header.timestamp) : startedAt;
+          const sessionAge = Date.now() - (Number.isFinite(sessionStart) ? sessionStart : startedAt);
           const branch = footerData.getGitBranch();
 
           // footer* theme keys mirror ccstatusline's truecolor table so the
@@ -186,7 +191,7 @@ export default function (pi: ExtensionAPI) {
           line1Parts.push(
             styled("footerDim", contextWindow ? `context: ${Math.round(percent)}% / ${contextWindow}` : `context: ${Math.round(percent)}%`),
             "  ",
-            styled("footerWarn", `session: ${formatDuration(Date.now() - startedAt)}`),
+            styled("footerWarn", `session: ${formatDuration(sessionAge)}`),
             "  ",
             styled("footerWarn", `cost: ${formatCost(total.cost.total)}`),
           );
