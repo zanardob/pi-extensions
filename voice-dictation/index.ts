@@ -1,5 +1,5 @@
 /**
- * Apple Voice — live dictation for Pi with two interchangeable engines.
+ * Voice Dictation — live dictation for Pi with two interchangeable engines.
  *
  * Press the shortcut (default Alt+V) to start, press it again to stop and
  * finalize. Or hold Space to talk (push-to-talk): press and hold, release to
@@ -12,7 +12,7 @@
  *
  * Also registers a `transcribe_audio` tool for local audio files.
  *
- * Config: ~/.pi/agent/apple-voice.json
+ * Config: ~/.pi/agent/voice-dictation.json
  *   keybind        shortcut (default "alt+v")
  *   provider       "auto" | "deepgram" | "apple"
  *   fileProvider   same choices for the transcribe_audio tool
@@ -75,7 +75,7 @@ function splitIdentifier(name: string): string[] {
 
 export default function appleVoiceExtension(pi: ExtensionAPI) {
   const config = loadConfig();
-  const keybind = (process.env.APPLE_VOICE_KEYBIND || config.keybind) as KeyId;
+  const keybind = (process.env.VOICE_DICTATION_KEYBIND || config.keybind) as KeyId;
   const idleHint = `voice: hold space or ${String(keybind)}`;
 
   let active = false;
@@ -108,7 +108,7 @@ export default function appleVoiceExtension(pi: ExtensionAPI) {
   const setIndicator = (footerText: string | undefined) => {
     const ui = sessionContext?.ui;
     if (!sessionContext?.hasUI || !ui) return;
-    ui.setStatus("apple-voice", footerText);
+    ui.setStatus("voice-dictation", footerText);
   };
 
   const applyTranscript = (display: string) => {
@@ -149,7 +149,7 @@ export default function appleVoiceExtension(pi: ExtensionAPI) {
     strippedSpaces = 0;
     receivedText = false;
     setIndicator(idleHint);
-    if (error && ctx?.hasUI) ctx.ui.notify(`apple voice: ${error}`, "error");
+    if (error && ctx?.hasUI) ctx.ui.notify(`voice-dictation: ${error}`, "error");
   };
 
   async function buildTerms(ctx: ExtensionContext): Promise<string[]> {
@@ -177,7 +177,7 @@ export default function appleVoiceExtension(pi: ExtensionAPI) {
     const args: string[] = [];
     if (locale) args.push("--locale", locale);
     if (terms.length > 0) args.push("--context", terms.join(","));
-    if (process.env.APPLE_VOICE_FILE) args.push("--file", process.env.APPLE_VOICE_FILE);
+    if (process.env.VOICE_DICTATION_FILE) args.push("--file", process.env.VOICE_DICTATION_FILE);
 
     let child: ChildProcess;
     try {
@@ -258,7 +258,7 @@ export default function appleVoiceExtension(pi: ExtensionAPI) {
       apiKey = await resolveKey();
       if (!apiKey) {
         if (choice === "deepgram") {
-          ctx.ui.notify("apple voice: no Deepgram key (set DEEPGRAM_API_KEY or deepgram.apiKey); using on-device engine", "warning");
+          ctx.ui.notify("voice-dictation: no Deepgram key (set DEEPGRAM_API_KEY or deepgram.apiKey); using on-device engine", "warning");
         }
         choice = "apple";
       } else {
@@ -383,7 +383,7 @@ export default function appleVoiceExtension(pi: ExtensionAPI) {
   };
 
   pi.registerShortcut(keybind, {
-    description: "Apple Voice: live dictation (Deepgram Nova-3 or on-device Apple)",
+    description: "Voice Dictation: live dictation (Deepgram Nova-3 or on-device Apple)",
     handler: async (ctx) => {
       if (!ctx.hasUI) return;
       if (active) {

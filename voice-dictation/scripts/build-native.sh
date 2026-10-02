@@ -1,11 +1,11 @@
 #!/bin/bash
-# Builds the native Apple Voice helpers into the runtime directory that the
-# extension expects (~/.pi/agent/apple-stt by default).
+# Builds the native Voice Dictation helpers into the runtime directory that the
+# extension expects (~/.pi/agent/voice-dictation by default).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_DIR="$(dirname "$SCRIPT_DIR")"
-RUNTIME_DIR="${APPLE_STT_DIR:-$HOME/.pi/agent/apple-stt}"
+RUNTIME_DIR="${VOICE_DICTATION_DIR:-$HOME/.pi/agent/voice-dictation}"
 
 mkdir -p "$RUNTIME_DIR"
 swiftc -O -parse-as-library "$PACKAGE_DIR/native/apple-voice.swift" -o "$RUNTIME_DIR/apple-voice"

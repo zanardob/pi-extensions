@@ -1,4 +1,4 @@
-# Apple Voice — dictation for Pi
+# Voice Dictation — dictation for Pi
 
 Live push-to-talk dictation with two interchangeable engines:
 Deepgram Nova-3 (cloud, Claude Code's engine) or Apple on-device.
@@ -10,8 +10,8 @@ Deepgram Nova-3 (cloud, Claude Code's engine) or Apple on-device.
 | `index.ts`, `config.ts`, `deepgram.ts` | Pi extension (this directory) |
 | `native/apple-voice.swift` | Live helper: mic → Apple `DictationTranscriber`, streams NDJSON (`volatile`/`final`) |
 | `native/apple-stt.swift` | One-shot file transcription CLI (`DictationTranscriber`, SpeechTranscriber fallback) |
-| `~/.pi/agent/apple-stt/` | Built helper binaries (runtime; produced by `scripts/build-native.sh`) |
-| `~/.pi/agent/apple-voice.json` | Configuration (below) |
+| `~/.pi/agent/voice-dictation/` | Built helper binaries (runtime; produced by `scripts/build-native.sh`) |
+| `~/.pi/agent/voice-dictation.json` | Configuration (below) |
 | [claude-ui](../claude-ui/) | Renders extension statuses (voice hint) in the footer |
 
 ## Setup
@@ -20,8 +20,8 @@ Deepgram Nova-3 (cloud, Claude Code's engine) or Apple on-device.
 scripts/setup.sh
 ```
 
-Builds both helpers into `~/.pi/agent/apple-stt/` and writes a default
-`~/.pi/agent/apple-voice.json` if one does not exist.
+Builds both helpers into `~/.pi/agent/voice-dictation/` and writes a default
+`~/.pi/agent/voice-dictation.json` if one does not exist.
 
 Requirements: macOS 26+ and a Swift toolchain (Xcode Command Line Tools) to
 build the helpers; `ffmpeg` in `PATH` for Deepgram microphone capture. Deepgram
@@ -47,9 +47,9 @@ scripts/build-native.sh
 - **Tool**: `transcribe_audio` for local files (Deepgram pre-recorded when a
   key is configured, otherwise the `apple-stt` CLI).
 
-## Config (`~/.pi/agent/apple-voice.json`)
+## Config (`~/.pi/agent/voice-dictation.json`)
 
-- `keybind` — toggle shortcut (env `APPLE_VOICE_KEYBIND` wins).
+- `keybind` — toggle shortcut (env `VOICE_DICTATION_KEYBIND` wins).
 - `provider` / `fileProvider` — `auto` | `deepgram` | `apple`.
 - `locale` — BCP-47 id (`"en-GB"`); empty = system.
 - `context` / `extraTerms` — keyterm boosting on/off and custom terms.
@@ -62,6 +62,6 @@ Push-to-talk tuning lives in `index.ts`: `HOLD_EVENTS`, `HOLD_FIRST_GAP_MS`,
 
 ## Environment overrides
 
-- `APPLE_VOICE_CONFIG` — alternate config file path.
-- `APPLE_VOICE_BIN` / `APPLE_STT_BIN` — alternate helper binaries.
-- `APPLE_VOICE_FILE` — feed a file instead of the mic (testing).
+- `VOICE_DICTATION_CONFIG` — alternate config file path.
+- `VOICE_DICTATION_BIN` / `VOICE_DICTATION_STT_BIN` — alternate helper binaries.
+- `VOICE_DICTATION_FILE` — feed a file instead of the mic (testing).

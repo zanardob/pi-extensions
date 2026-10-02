@@ -10,7 +10,7 @@
       "./claude-ui/claude-footer.ts",
       "./claude-ui/claude-tools.ts",
       "./claude-ui/claude-uniform.ts",
-      "./apple-voice/index.ts",
+      "./voice-dictation/index.ts",
       "./usage/usage.ts",
       "./aliases/index.ts"
     ],

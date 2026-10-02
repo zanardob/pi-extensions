@@ -1,16 +1,16 @@
 /**
- * Configuration loading and credential resolution for Apple Voice.
+ * Configuration loading and credential resolution for Voice Dictation.
  */
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 export const CONFIG_PATH =
-  process.env.APPLE_VOICE_CONFIG || join(homedir(), ".pi", "agent", "apple-voice.json");
+  process.env.VOICE_DICTATION_CONFIG || join(homedir(), ".pi", "agent", "voice-dictation.json");
 export const STT_CONFIG_PATH = join(homedir(), ".pi", "agent", "stt.json");
-export const DIR = join(homedir(), ".pi", "agent", "apple-stt");
-export const VOICE_BIN = process.env.APPLE_VOICE_BIN || join(DIR, "apple-voice");
-export const BATCH_BIN = process.env.APPLE_STT_BIN || join(DIR, "apple-stt");
+export const DIR = join(homedir(), ".pi", "agent", "voice-dictation");
+export const VOICE_BIN = process.env.VOICE_DICTATION_BIN || join(DIR, "apple-voice");
+export const BATCH_BIN = process.env.VOICE_DICTATION_STT_BIN || join(DIR, "apple-stt");
 
 export type ProviderChoice = "auto" | "deepgram" | "apple";
 
@@ -83,7 +83,7 @@ export function loadConfig(): VoiceConfig {
   const rawDeepgram = objectFrom(raw.deepgram);
   const rawCapture = objectFrom(raw.capture);
   return {
-    keybind: process.env.APPLE_VOICE_KEYBIND || stringOr(raw.keybind, defaults.keybind),
+    keybind: process.env.VOICE_DICTATION_KEYBIND || stringOr(raw.keybind, defaults.keybind),
     provider: providerOr(raw.provider, defaults.provider),
     locale: stringOr(raw.locale, defaults.locale),
     context: raw.context !== false,

@@ -1,5 +1,5 @@
 #!/bin/bash
-# One-time setup for the Apple Voice extension: build the native helpers and
+# One-time setup for the Voice Dictation extension: build the native helpers and
 # write a default config file if none exists.
 set -euo pipefail
 
@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 "$SCRIPT_DIR/build-native.sh"
 
-CONFIG="$HOME/.pi/agent/apple-voice.json"
+CONFIG="$HOME/.pi/agent/voice-dictation.json"
 if [ ! -f "$CONFIG" ]; then
   mkdir -p "$(dirname "$CONFIG")"
   cat > "$CONFIG" <<'JSON'
