@@ -29,6 +29,7 @@ function addUsage(total: Usage, usage: Usage | undefined): void {
   total.cacheRead += usage.cacheRead ?? 0;
   total.cacheWrite += usage.cacheWrite ?? 0;
   total.totalTokens += usage.totalTokens ?? 0;
+  total.reasoning = (total.reasoning ?? 0) + (usage.reasoning ?? 0);
   total.cost.input += usage.cost?.input ?? 0;
   total.cost.output += usage.cost?.output ?? 0;
   total.cost.cacheRead += usage.cost?.cacheRead ?? 0;
@@ -61,6 +62,9 @@ function prettyModel(id: string | undefined): string {
 }
 
 const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
+
+/** Hide the reasoning share below this percent (mirrors tmustier's usage insights). */
+const REASONING_MIN_PERCENT = 5;
 
 /** Theme key for a level: thinkingOff … thinkingMax (already in every theme). */
 function thinkingColorKey(level: string): string {
@@ -137,6 +141,7 @@ export default function (pi: ExtensionAPI) {
             output: 0,
             cacheRead: 0,
             cacheWrite: 0,
+            reasoning: 0,
             totalTokens: 0,
             cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
           };
@@ -159,16 +164,22 @@ export default function (pi: ExtensionAPI) {
           // theme's own thinking<Level> colour (same key the editor border
           // uses), so the footer always agrees with the active level.
           const thinking = currentThinkingLevel(pi, ctx);
-          const line1Parts = [styled("footerModel", ` Model: ${prettyModel(ctx.model?.id)}`), "  "];
+          const line1Parts = [styled("footerModel", ` model: ${prettyModel(ctx.model?.id)}`), "  "];
           if (thinking) {
-            line1Parts.push(styled(thinkingColorKey(thinking), `Thinking: ${thinking}`), "  ");
+            line1Parts.push(styled(thinkingColorKey(thinking), `thinking: ${thinking}`), "  ");
+          }
+          // Share of output tokens that were hidden reasoning (provider-reported only).
+          const reasoningShare =
+            total.output > 0 ? ((total.reasoning ?? 0) / total.output) * 100 : null;
+          if (reasoningShare !== null && reasoningShare >= REASONING_MIN_PERCENT) {
+            line1Parts.push(styled("footerDim", `reason: ${Math.round(reasoningShare)}%`), "  ");
           }
           line1Parts.push(
-            styled("footerDim", `Ctx(u) Used: ${percent.toFixed(1)}%`),
+            styled("footerDim", `ctx: ${percent.toFixed(1)}%`),
             "  ",
-            styled("footerWarn", `Session: ${formatDuration(Date.now() - startedAt)}`),
+            styled("footerWarn", `session: ${formatDuration(Date.now() - startedAt)}`),
             "  ",
-            styled("footerWarn", `Cost: ${formatCost(total.cost.total)}`),
+            styled("footerWarn", `cost: ${formatCost(total.cost.total)}`),
           );
           const line1 = line1Parts.join("");
 
