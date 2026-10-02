@@ -14,12 +14,6 @@ Personal extensions for the [Pi coding agent](https://pi.dev).
 ## Install
 
 ```bash
-pi install /Users/zanardo/Developer/pi-extensions
-```
-
-Or, once pushed to GitHub:
-
-```bash
 pi install git:github.com/zanardob/pi-extensions
 ```
 
