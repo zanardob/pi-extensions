@@ -8,14 +8,14 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 export default function (pi: ExtensionAPI) {
   pi.registerCommand("exit", {
-    description: "Alias for /quit",
+    description: "Quit Pi",
     handler: async (_args, ctx) => {
       ctx.shutdown();
     },
   });
 
   pi.registerCommand("rename", {
-    description: "Alias for /name — set or show the session display name",
+    description: "Set session display name",
     handler: async (args, ctx) => {
       const name = args.trim();
       if (name) {
