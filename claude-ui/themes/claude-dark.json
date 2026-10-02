@@ -88,7 +88,11 @@
     "footerWarn": "yellow",
     "footerPath": "blue",
     "footerGit": "magenta",
-    "footerReason": "green"
+    "footerReason": "green",
+    "footerName": "#E8A87C",
+    "footerSession": "#B39DDB",
+    "footerAdd": "green",
+    "footerDel": "red"
   },
   "export": {
     "pageBg": "#000000",

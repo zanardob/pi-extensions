@@ -103,7 +103,7 @@ export default function (pi: ExtensionAPI) {
     startedAt = Date.now();
 
     ctx.ui.setFooter((tui, theme, footerData) => {
-      const { styled } = makeStyle(theme);
+      const { fg, styled } = makeStyle(theme);
       requestRender = () => tui.requestRender();
       const unsubBranch = footerData.onBranchChange(() => tui.requestRender());
       const unsubName = pi.events.on("session-name-changed", () => tui.requestRender());
@@ -194,7 +194,7 @@ export default function (pi: ExtensionAPI) {
           line1Parts.push(
             styled("footerDim", contextWindow ? `context: ${Math.round(percent)}% / ${contextWindow}` : `context: ${Math.round(percent)}%`),
             "  ",
-            styled("footerWarn", `session: ${formatDuration(sessionAge)}`),
+            styled("footerSession", `session: ${formatDuration(sessionAge)}`),
             "  ",
             styled("footerWarn", `cost: ${formatCost(total.cost.total)}`),
           );
@@ -213,13 +213,18 @@ export default function (pi: ExtensionAPI) {
             .map(stripEmoji)
             .filter((text) => text.length > 0);
           const line3 = branch
-            ? styled("footerGit", ` ⎇ ${branch}`) + styled("footerWarn", ` (+${gitStats.added},-${gitStats.removed})`)
+            ? styled("footerGit", ` ⎇ ${branch}`) +
+              fg("footerDim", " (") +
+              styled("footerAdd", `+${gitStats.added}`) +
+              fg("footerDim", ",") +
+              styled("footerDel", `-${gitStats.removed}`) +
+              fg("footerDim", ")")
             : styled("footerGit", " ⎇ no git");
           // Extension hints live on their own line, below the git status.
           const statusLine = statuses.length > 0 ? styled("footerDim", ` ${statuses.join("  ")}`) : undefined;
 
           const nameLine = sessionName
-            ? styled("footerModel", ` name: ${sessionName}`)
+            ? styled("footerName", ` name: ${sessionName}`)
             : undefined;
           const lines = nameLine ? [nameLine, line1, line2, line3] : [line1, line2, line3];
           if (statusLine) lines.push(statusLine);
