@@ -1,0 +1,19 @@
+{
+  "name": "pi-apple-voice",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Push-to-talk voice dictation for Pi using Apple on-device or Deepgram Nova-3",
+  "keywords": ["pi-package"],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "pi": {
+    "extensions": ["index.ts"]
+  },
+  "scripts": {
+    "build": "scripts/build-native.sh",
+    "setup": "scripts/setup.sh"
+  }
+}

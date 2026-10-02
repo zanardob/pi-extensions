@@ -1,0 +1,542 @@
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import {
+  createBashToolDefinition,
+  createEditToolDefinition,
+  createFindToolDefinition,
+  createGrepToolDefinition,
+  createLsToolDefinition,
+  createReadToolDefinition,
+  createWriteToolDefinition,
+  getLanguageFromPath,
+  highlightCode,
+} from "@earendil-works/pi-coding-agent";
+import { claudeState } from "./claude-shared/state.ts";
+import {
+  C,
+  CTX_NUM_FG,
+  DIFF_INDENT,
+  ERROR_FG,
+  LinesComponent,
+  MUTED,
+  type Row,
+  bold,
+  dotFor,
+  link,
+  relativePath,
+  renderStreamedOutput,
+  row,
+  startTiming,
+  textOutput,
+  trimTrailingEmpty,
+} from "./claude-shared/style.ts";
+
+// ============================================================================
+// Claude-Code-style rendering for the built-in tools (read/bash/write/edit
+// plus grep/find/ls). Shared primitives live in ./claude-shared/style.ts;
+// claude-uniform.ts applies the same look to every other tool.
+//
+// Rendering only: every override delegates execute() to the original tool, so
+// behavior, permissions, hooks and command rewriting (e.g. RTK) are untouched.
+// No file I/O happens in any renderer, so streaming and expansion stay smooth.
+//
+// Style rules:
+//   - Plain (lowercase) tool names: bash(), read(), write(), edit().
+//   - Status dots: gray ● while running, green when done, red on error.
+//   - Assistant messages get a leading white circle (●), like Claude Code.
+//   - Only edit shows a diff — bash/read/write never do.
+//   - ctrl+o (app.tools.expand) gives every tool a meaningful expanded state:
+//     bash 20 → 500 line cap, read shows the file content, edit shows the
+//     untrimmed diff. Collapsed views stay Claude-Code-style.
+// ============================================================================
+
+/** Bash call header shows the full command up to this many lines; longer
+ *  commands collapse to the first line + hint (ctrl+o reveals everything). */
+const BASH_CALL_MAX_LINES = 5;
+
+// ============================================================================
+// Claude-Code-style edit diff rendering.
+// Port of CC native-ts/color-diff "light": full-row pastel line backgrounds,
+// syntax-highlighted line text (decoration colour where untokenised), and a
+// stronger background on word-level changes. Rendered per hunk, never folded.
+// ============================================================================
+
+const tokenizeWords = (s: string): string[] => s.match(/\w+|\s+|[^\w\s]/g) ?? [];
+
+/** LCS word diff: k=0 same, k=1 removed, k=2 added. */
+function diffTokens(a: string[], b: string[]): { t: string; k: 0 | 1 | 2 }[] {
+  const n = a.length;
+  const m = b.length;
+  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const out: { t: string; k: 0 | 1 | 2 }[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) {
+      out.push({ t: a[i], k: 0 });
+      i++;
+      j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      out.push({ t: a[i], k: 1 });
+      i++;
+    } else {
+      out.push({ t: b[j], k: 2 });
+      j++;
+    }
+  }
+  while (i < n) out.push({ t: a[i++], k: 1 });
+  while (j < m) out.push({ t: b[j++], k: 2 });
+  return out;
+}
+
+/** Raw char offsets of changed tokens on one side of the diff. */
+function spansFor(tokens: { t: string; k: 0 | 1 | 2 }[], kind: 1 | 2): { start: number; end: number }[] {
+  const spans: { start: number; end: number }[] = [];
+  let pos = 0;
+  let start = -1;
+  for (const p of tokens) {
+    if (p.k === kind) {
+      if (start < 0) start = pos;
+    } else if (start >= 0) {
+      spans.push({ start, end: pos });
+      start = -1;
+    }
+    if (p.k === 0 || p.k === kind) pos += p.t.length;
+  }
+  if (start >= 0) spans.push({ start, end: pos });
+  return spans;
+}
+
+/** Add an extra background over `spans` inside an already-styled string. */
+function injectWordBg(styled: string, spans: { start: number; end: number }[], wordBg: string, lineBg: string): string {
+  if (!spans.length) return styled;
+  let out = "";
+  let raw = 0;
+  let si = 0;
+  let inSpan = false;
+  let i = 0;
+  while (i < styled.length) {
+    const ch = styled[i];
+    if (ch === "\x1b") {
+      const m = styled.slice(i).match(/^\x1b\[[0-9;?]*[@-~]/);
+      out += m ? m[0] : ch;
+      i += m ? m[0].length : 1;
+      continue;
+    }
+    for (;;) {
+      if (inSpan && si < spans.length && raw === spans[si].end) {
+        out += lineBg;
+        inSpan = false;
+        si++;
+        continue;
+      }
+      if (!inSpan && si < spans.length && raw === spans[si].start) {
+        out += wordBg;
+        inSpan = true;
+        continue;
+      }
+      break;
+    }
+    out += ch;
+    raw++;
+    i++;
+  }
+  if (inSpan) out += lineBg;
+  return out;
+}
+
+function highlightLine(content: string, lang: string | undefined, lineBg: string | null): string {
+  let styled = (highlightCode(content, lang) ?? [content])[0] ?? content;
+  // A full reset inside the highlighter would also kill the line background;
+  // re-emit it right after so the tint survives.
+  if (lineBg) styled = styled.replace(/\x1b\[0m/g, "\x1b[0m" + lineBg);
+  return styled;
+}
+
+type DiffEntry = { sign: "+" | "-" | " "; num: string; content: string; sep?: boolean };
+
+const parseDiffLine = (line: string): DiffEntry | null => {
+  const m = line.match(/^([+-\s])(\s*\d*)\s(.*)$/);
+  if (!m) return null;
+  return { sign: m[1] as "+" | "-" | " ", num: m[2].trim(), content: m[3] };
+};
+
+/** Context lines shown around each change; pi's diff carries 4, we trim to 3. */
+const CONTEXT_LINES = 3;
+
+/**
+ * Full edit result rendering, Claude-Code-style: a single
+ * `⎿  Added X lines, removed Y lines` header, then every diff line below it —
+ * changed lines with green/red numbers and pastel backgrounds, and (collapsed
+ * only) up to 3 context lines around each change with `...` between distant
+ * hunks. Expanded shows the diff untrimmed.
+ */
+function renderUpdateResult(diffText: string, lang: string | undefined, expanded: boolean): Row[] {
+  const tabs = (s: string) => s.replace(/\t/g, "   ");
+  const entries: DiffEntry[] = [];
+  for (const line of diffText.split("\n")) {
+    const parsed = parseDiffLine(line);
+    if (!parsed) {
+      entries.push({ sign: " ", num: "", content: line });
+      continue;
+    }
+    // pi emits ` ` + blank number + ` ...` between distant hunks.
+    if (parsed.sign === " " && parsed.num === "" && parsed.content.trim() === "...") {
+      entries.push({ sign: " ", num: "", content: "...", sep: true });
+      continue;
+    }
+    entries.push(parsed);
+  }
+  if (!entries.some((e) => e.sign !== " ")) return [];
+
+  // Trim context runs to CONTEXT_LINES around changes, keeping the lines
+  // adjacent to each change. A run between two changes that had lines dropped
+  // gets a `...` separator so the hunks stay visually apart.
+  const isChange = (e: DiffEntry) => e.sign !== " ";
+  const prevIsChange = (idx: number) => {
+    for (let k = idx - 1; k >= 0; k--) {
+      if (entries[k].sep) continue;
+      return isChange(entries[k]);
+    }
+    return false;
+  };
+  const nextIsChange = (idx: number) => {
+    for (let k = idx + 1; k < entries.length; k++) {
+      if (entries[k].sep) continue;
+      return isChange(entries[k]);
+    }
+    return false;
+  };
+  const shown: DiffEntry[] = expanded
+    ? entries
+    : (() => {
+        // Trim context runs to CONTEXT_LINES around changes, keeping the lines
+        // adjacent to each change. A run between two changes that had lines
+        // dropped gets a `...` separator so the hunks stay visually apart.
+        const out: DiffEntry[] = [];
+        let i = 0;
+        while (i < entries.length) {
+          const e = entries[i];
+          if (e.sep || isChange(e)) {
+            out.push(e);
+            i++;
+            continue;
+          }
+          let j = i;
+          while (j < entries.length && !entries[j].sep && !isChange(entries[j])) j++;
+          const run = entries.slice(i, j);
+          const afterChange = prevIsChange(i);
+          const beforeChange = nextIsChange(j - 1);
+          if (afterChange && beforeChange) {
+            if (run.length <= CONTEXT_LINES * 2) {
+              out.push(...run);
+            } else {
+              out.push(...run.slice(0, CONTEXT_LINES));
+              out.push({ sign: " ", num: "", content: "...", sep: true });
+              out.push(...run.slice(run.length - CONTEXT_LINES));
+            }
+          } else if (afterChange) {
+            out.push(...run.slice(0, CONTEXT_LINES));
+          } else if (beforeChange) {
+            out.push(...run.slice(Math.max(0, run.length - CONTEXT_LINES)));
+          }
+          i = j;
+        }
+        return out;
+      })();
+
+  let adds = 0;
+  let dels = 0;
+  for (const e of entries) {
+    if (e.sign === "+") adds++;
+    else if (e.sign === "-") dels++;
+  }
+  const parts: string[] = [];
+  if (adds > 0) parts.push(`Added ${bold(String(adds))} ${adds === 1 ? "line" : "lines"}`);
+  if (dels > 0) parts.push(`Removed ${bold(String(dels))} ${dels === 1 ? "line" : "lines"}`);
+  // CC wording: "Added 8 lines, removed 2 lines" — lowercase after the first part.
+  const summary = parts.map((p, i2) => (i2 === 0 ? p : p.charAt(0).toLowerCase() + p.slice(1))).join(", ");
+  const rows: Row[] = [row(`${MUTED}⎿${C.reset}  ${summary}`)];
+
+  const numWidth = Math.max(1, ...entries.filter((e) => !e.sep).map((e) => e.num.length));
+  const pad = " ".repeat(DIFF_INDENT);
+  for (let k = 0; k < shown.length; k++) {
+    const e = shown[k];
+    if (e.sep) {
+      rows.push(row(pad + MUTED + " ".repeat(numWidth + 4) + "..." + C.reset));
+      continue;
+    }
+    const num = e.num.padStart(numWidth);
+    if (e.sign === " ") {
+      // 4 spaces after the number = num + space + sign + 2 spaces on change
+      // rows, so +/- doesn't shift content relative to context lines.
+      rows.push(row(pad + CTX_NUM_FG + num + "    " + C.ctxFg + tabs(e.content) + C.reset));
+      continue;
+    }
+    const isDel = e.sign === "-";
+    const at = (n: number) => shown[n] && !shown[n].sep && shown[n].sign;
+    // Word-diff only for a single removed line directly followed by a single
+    // added line (same pairing rule as before).
+    const paired =
+      isDel
+        ? at(k - 1) !== "-" && at(k + 1) === "+" && at(k + 2) !== "+"
+        : at(k + 1) !== "+" && at(k - 1) === "-" && at(k - 2) !== "-";
+    const lineBg = isDel ? C.delLineBg : C.addLineBg;
+    const fg = isDel ? C.delFg : C.addFg;
+    const content = tabs(e.content);
+    let body = highlightLine(content, lang, lineBg);
+    if (paired) {
+      const other = tabs((isDel ? shown[k + 1] : shown[k - 1]).content);
+      const wd = diffTokens(tokenizeWords(isDel ? content : other), tokenizeWords(isDel ? other : content));
+      body = injectWordBg(body, spansFor(wd, isDel ? 1 : 2), isDel ? C.delWordBg : C.addWordBg, lineBg);
+    }
+    rows.push({ text: lineBg + fg + pad + `${num} ${e.sign}  ` + body + C.reset, bg: lineBg });
+  }
+  return rows;
+}
+
+// ============================================================================
+// Extension registration
+// ============================================================================
+
+export default function (pi: ExtensionAPI) {
+  // Per-cwd cache of the built-in tool definitions we delegate to.
+  type Defs = {
+    bash: ReturnType<typeof createBashToolDefinition>;
+    read: ReturnType<typeof createReadToolDefinition>;
+    write: ReturnType<typeof createWriteToolDefinition>;
+    edit: ReturnType<typeof createEditToolDefinition>;
+    grep: ReturnType<typeof createGrepToolDefinition>;
+    find: ReturnType<typeof createFindToolDefinition>;
+    ls: ReturnType<typeof createLsToolDefinition>;
+  };
+  const defsCache = new Map<string, Defs>();
+  const defsFor = (cwd: string): Defs => {
+    let defs = defsCache.get(cwd);
+    if (!defs) {
+      defs = {
+        bash: createBashToolDefinition(cwd) as any,
+        read: createReadToolDefinition(cwd) as any,
+        write: createWriteToolDefinition(cwd) as any,
+        edit: createEditToolDefinition(cwd) as any,
+        grep: createGrepToolDefinition(cwd) as any,
+        find: createFindToolDefinition(cwd) as any,
+        ls: createLsToolDefinition(cwd) as any,
+      };
+      defsCache.set(cwd, defs);
+    }
+    return defs;
+  };
+
+  // ---- Bash ----------------------------------------------------------------
+
+  pi.registerTool({
+    ...(defsFor(process.cwd()).bash as any),
+    // Render our own shell: skips pi's default Box (Spacer + paddingY), which
+    // put two blank lines between the model's text and tool rows. One blank
+    // line remains, matching Claude Code; the gutter keeps alignment.
+    renderShell: "self",
+    async execute(id: any, params: any, signal: any, onUpdate: any, ctx: any) {
+      return defsFor(ctx.cwd).bash.execute(id, params, signal, onUpdate, ctx);
+    },
+    renderCall(args: any, theme: any, context: any) {
+      startTiming(context);
+      const command = typeof args?.command === "string" ? args.command : "";
+      const timeoutSuffix = args?.timeout ? theme.fg("muted", ` (timeout ${args.timeout}s)`) : "";
+      const cmdLines = command ? command.split("\n") : [theme.fg("toolOutput", "...")];
+      const rows: Row[] = [row(`${dotFor(context)} ${bold("bash")}(${cmdLines[0]})${timeoutSuffix}`)];
+      const extra = cmdLines.slice(1);
+      if (extra.length > 0) {
+        if (cmdLines.length > BASH_CALL_MAX_LINES && !context.expanded) {
+          // Long command: collapsed header shows just the first line.
+          rows.push(row(`       ${MUTED}… +${extra.length} lines (ctrl+o to expand)${C.reset}`));
+        } else {
+          for (const l of extra) rows.push(row("       " + l));
+        }
+      }
+      return new LinesComponent(rows);
+    },
+    renderResult(result: any, options: any, _theme: any, context: any) {
+      // Streaming header, `done in 1.2s (12 lines)` header, body cap, and the
+      // truncation footnote all live in the shared renderer (also used by the
+      // listing tools and the generic uniform renderer in claude-uniform.ts).
+      return renderStreamedOutput(result, options, context);
+    },
+  } as any);
+
+  // ---- Read ----------------------------------------------------------------
+
+  pi.registerTool({
+    ...(defsFor(process.cwd()).read as any),
+    renderShell: "self",
+    async execute(id: any, params: any, signal: any, onUpdate: any, ctx: any) {
+      return defsFor(ctx.cwd).read.execute(id, params, signal, onUpdate, ctx);
+    },
+    renderCall(args: any, theme: any, context: any) {
+      const p = typeof args?.path === "string" ? args.path : typeof args?.file_path === "string" ? args.file_path : "";
+      const display = p ? relativePath(p, context.cwd) : theme.fg("toolOutput", "...");
+      const start = args?.offset ?? 1;
+      const range =
+        args?.limit !== undefined
+          ? theme.fg("muted", `:${start}-${start + args.limit - 1}`)
+          : args?.offset !== undefined
+            ? theme.fg("muted", `:${start}`)
+            : "";
+      return new LinesComponent([row(`${dotFor(context)} ${bold("read")}(${link(display)})${range}`)]);
+    },
+    renderResult(result: any, options: any, theme: any, context: any) {
+      if (context.isError) {
+        return new LinesComponent([row(`${MUTED}⎿${C.reset}  ` + ERROR_FG + textOutput(result) + C.reset)]);
+      }
+      const lines = trimTrailingEmpty(textOutput(result).split("\n"));
+      // Expanded (ctrl+o): show the full content via the built-in renderer,
+      // like pi does natively. Collapsed stays a one-line summary.
+      if (lines.length === 0 || options.expanded) {
+        return defsFor(context.cwd).read.renderResult(result, options, theme, context);
+      }
+      const suffix = result?.details?.truncation?.truncated ? " (truncated)" : "";
+      return new LinesComponent([row(`${MUTED}⎿${C.reset}  Read ${lines.length} ${lines.length === 1 ? "line" : "lines"}${suffix}`)]);
+    },
+  } as any);
+
+  // ---- Write ---------------------------------------------------------------
+
+  pi.registerTool({
+    ...(defsFor(process.cwd()).write as any),
+    renderShell: "self",
+    async execute(id: any, params: any, signal: any, onUpdate: any, ctx: any) {
+      return defsFor(ctx.cwd).write.execute(id, params, signal, onUpdate, ctx);
+    },
+    renderCall(args: any, theme: any, context: any) {
+      const p = typeof args?.path === "string" ? args.path : typeof args?.file_path === "string" ? args.file_path : "";
+      const display = p ? relativePath(p, context.cwd) : theme.fg("toolOutput", "...");
+      return new LinesComponent([row(`${dotFor(context)} ${bold("write")}(${link(display)})`)]);
+    },
+    renderResult(result: any, _options: any, theme: any, context: any) {
+      if (context.isError) {
+        return new LinesComponent([row(`${MUTED}⎿${C.reset}  ` + ERROR_FG + textOutput(result) + C.reset)]);
+      }
+      return new LinesComponent([row(`${MUTED}⎿${C.reset}  Written`)]);
+    },
+  } as any);
+
+  // ---- Update (edit) -------------------------------------------------------
+
+  pi.registerTool({
+    ...(defsFor(process.cwd()).edit as any),
+    renderShell: "self",
+    async execute(id: any, params: any, signal: any, onUpdate: any, ctx: any) {
+      return defsFor(ctx.cwd).edit.execute(id, params, signal, onUpdate, ctx);
+    },
+    renderCall(args: any, theme: any, context: any) {
+      const p = typeof args?.path === "string" ? args.path : typeof args?.file_path === "string" ? args.file_path : "";
+      const display = p ? relativePath(p, context.cwd) : theme.fg("toolOutput", "...");
+      return new LinesComponent([row(`${dotFor(context)} ${bold("edit")}(${link(display)})`)]);
+    },
+    renderResult(result: any, options: any, theme: any, context: any) {
+      const diff = !context.isError ? (result?.details?.diff as string | undefined) : undefined;
+      const path = context.args?.path ?? context.args?.file_path;
+      const lang = typeof path === "string" ? getLanguageFromPath(path) : undefined;
+      if (!diff) {
+        return defsFor(context.cwd).edit.renderResult(result, options, theme, context);
+      }
+      const rows = renderUpdateResult(diff, lang, options.expanded === true);
+      if (rows.length === 0) {
+        return defsFor(context.cwd).edit.renderResult(result, options, theme, context);
+      }
+      return new LinesComponent(rows);
+    },
+  } as any);
+
+  // ---- Grep / Find / Ls -----------------------------------------------------
+
+  // The listing tools share the shell tools' result body (`⎿ done in 1.2s
+  // (12 lines)` + indented output) so every built-in tool reads the same way.
+  const listingPath = (value: unknown, cwd: string | undefined, fallback: string): string => {
+    const raw = typeof value === "string" && value !== "" ? value : fallback;
+    return link(relativePath(raw, cwd));
+  };
+
+  pi.registerTool({
+    ...(defsFor(process.cwd()).grep as any),
+    renderShell: "self",
+    async execute(id: any, params: any, signal: any, onUpdate: any, ctx: any) {
+      return defsFor(ctx.cwd).grep.execute(id, params, signal, onUpdate, ctx);
+    },
+    renderCall(args: any, _theme: any, context: any) {
+      startTiming(context);
+      const pattern = typeof args?.pattern === "string" ? args.pattern : "";
+      const glob = typeof args?.glob === "string" && args.glob ? `${MUTED} (${args.glob})${C.reset}` : "";
+      const limit = args?.limit !== undefined ? `${MUTED} limit ${args.limit}${C.reset}` : "";
+      const call = `${bold("grep")}(${link(`/${pattern}/`)}${MUTED} in ${C.reset}${listingPath(args?.path, context.cwd, ".")}${glob}${limit})`;
+      return new LinesComponent([row(`${dotFor(context)} ${call}`)]);
+    },
+    renderResult(result: any, options: any, _theme: any, context: any) {
+      return renderStreamedOutput(result, options, context);
+    },
+  } as any);
+
+  pi.registerTool({
+    ...(defsFor(process.cwd()).find as any),
+    renderShell: "self",
+    async execute(id: any, params: any, signal: any, onUpdate: any, ctx: any) {
+      return defsFor(ctx.cwd).find.execute(id, params, signal, onUpdate, ctx);
+    },
+    renderCall(args: any, _theme: any, context: any) {
+      startTiming(context);
+      const pattern = typeof args?.pattern === "string" ? args.pattern : "";
+      const limit = args?.limit !== undefined ? `${MUTED} (limit ${args.limit})${C.reset}` : "";
+      const call = `${bold("find")}(${link(pattern)}${MUTED} in ${C.reset}${listingPath(args?.path, context.cwd, ".")}${limit})`;
+      return new LinesComponent([row(`${dotFor(context)} ${call}`)]);
+    },
+    renderResult(result: any, options: any, _theme: any, context: any) {
+      return renderStreamedOutput(result, options, context);
+    },
+  } as any);
+
+  pi.registerTool({
+    ...(defsFor(process.cwd()).ls as any),
+    renderShell: "self",
+    async execute(id: any, params: any, signal: any, onUpdate: any, ctx: any) {
+      return defsFor(ctx.cwd).ls.execute(id, params, signal, onUpdate, ctx);
+    },
+    renderCall(args: any, _theme: any, context: any) {
+      startTiming(context);
+      const limit = args?.limit !== undefined ? `${MUTED} (limit ${args.limit})${C.reset}` : "";
+      const call = `${bold("ls")}(${listingPath(args?.path, context.cwd, ".")})${limit}`;
+      return new LinesComponent([row(`${dotFor(context)} ${call}`)]);
+    },
+    renderResult(result: any, options: any, _theme: any, context: any) {
+      return renderStreamedOutput(result, options, context);
+    },
+  } as any);
+
+  // ---- Assistant ● ---------------------------------------------------------
+
+  // Leading circle on assistant messages, like Claude Code. Markdown
+  // transformers can't inject ANSI, so the dot renders in the default
+  // foreground color (visually white). Messages starting with structural
+  // markdown (fences, headings, quotes, lists, tables) are left untouched so
+  // rendering doesn't break.
+  pi.registerMarkdownTransformer((markdown, context) => {
+    // ctrl+o collapses thinking runs to a one-line summary (styled dim/italic
+    // by the built-in thinking renderer); expanded shows the full text.
+    if (context.messageType === "assistant-thinking") {
+      return claudeState.thinkingExpanded ? markdown : "· thinking… (ctrl+o to expand)";
+    }
+    if (context.messageType !== "assistant") return markdown;
+    const lines = markdown.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+      if (trimmed === "") continue;
+      if (/^(```|~~~|#|>|\||([-*+]|\d+[.)])\s)/.test(trimmed)) return markdown;
+      lines[i] = lines[i].replace(/^(\s*)/, "$1● ");
+      return lines.join("\n");
+    }
+    return markdown;
+  });
+}

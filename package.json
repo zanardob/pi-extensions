@@ -1,0 +1,38 @@
+{
+  "name": "pi-extensions",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Personal extensions for the Pi coding agent",
+  "keywords": ["pi-package"],
+  "pi": {
+    "extensions": [
+      "./claude-ui/claude-editor.ts",
+      "./claude-ui/claude-footer.ts",
+      "./claude-ui/claude-tools.ts",
+      "./claude-ui/claude-uniform.ts",
+      "./apple-voice/index.ts",
+      "./usage/usage.ts",
+      "./exit-alias/exit-alias.ts"
+    ],
+    "themes": [
+      "./claude-ui/themes/claude-dark.json",
+      "./claude-ui/themes/claude-light.json"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "@earendil-works/pi-ai": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.99.2",
+    "@earendil-works/pi-tui": "0.99.2",
+    "@earendil-works/pi-ai": "0.99.2",
+    "@types/node": "^24.12.0",
+    "typescript": "^5.9.3"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "check": "npm run typecheck"
+  }
+}

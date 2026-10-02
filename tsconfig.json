@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2022",
+    "types": ["node"]
+  },
+  "files": [
+    "apple-voice/index.ts",
+    "claude-ui/claude-editor.ts",
+    "claude-ui/claude-footer.ts",
+    "claude-ui/claude-tools.ts",
+    "claude-ui/claude-uniform.ts",
+    "exit-alias/exit-alias.ts",
+    "usage/usage.ts"
+  ]
+}

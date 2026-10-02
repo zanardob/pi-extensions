@@ -1,0 +1,24 @@
+{
+  "name": "pi-claude-ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Claude-style editor, footer, tool rendering and themes for Pi",
+  "keywords": ["pi-package"],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "@earendil-works/pi-ai": "*"
+  },
+  "pi": {
+    "extensions": [
+      "claude-editor.ts",
+      "claude-footer.ts",
+      "claude-tools.ts",
+      "claude-uniform.ts"
+    ],
+    "themes": [
+      "themes/claude-dark.json",
+      "themes/claude-light.json"
+    ]
+  }
+}
