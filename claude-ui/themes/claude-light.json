@@ -69,7 +69,8 @@
     "footerDim": "#555753",
     "footerWarn": "#C4A000",
     "footerPath": "#3465A4",
-    "footerGit": "#75507B"
+    "footerGit": "#75507B",
+    "footerReason": "#2C7A39"
   },
   "export": {
     "pageBg": "#ffffff",

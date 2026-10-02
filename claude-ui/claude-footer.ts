@@ -172,10 +172,10 @@ export default function (pi: ExtensionAPI) {
           const reasoningShare =
             total.output > 0 ? ((total.reasoning ?? 0) / total.output) * 100 : null;
           if (reasoningShare !== null && reasoningShare >= REASONING_MIN_PERCENT) {
-            line1Parts.push(styled("footerDim", `reason: ${Math.round(reasoningShare)}%`), "  ");
+            line1Parts.push(styled("footerReason", `reason: ${Math.round(reasoningShare)}%`), "  ");
           }
           line1Parts.push(
-            styled("footerDim", `ctx: ${percent.toFixed(1)}%`),
+            styled("footerDim", `context: ${percent.toFixed(1)}%`),
             "  ",
             styled("footerWarn", `session: ${formatDuration(Date.now() - startedAt)}`),
             "  ",

@@ -87,7 +87,8 @@
     "footerDim": "blackBright",
     "footerWarn": "yellow",
     "footerPath": "blue",
-    "footerGit": "magenta"
+    "footerGit": "magenta",
+    "footerReason": "green"
   },
   "export": {
     "pageBg": "#000000",
