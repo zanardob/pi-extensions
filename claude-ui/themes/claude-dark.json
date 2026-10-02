@@ -89,6 +89,7 @@
     "footerPath": "blue",
     "footerGit": "magenta",
     "footerReason": "green",
+    "footerThinking": "#9E9E9E",
     "footerName": "white",
     "footerSession": "#B39DDB",
     "footerAdd": "green",

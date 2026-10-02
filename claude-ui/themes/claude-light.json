@@ -66,11 +66,12 @@
     "bashMode": "#8700FF",
 
     "footerModel": "#06989A",
-    "footerDim": "#555753",
+    "footerDim": "#6E6E6E",
     "footerWarn": "#C4A000",
     "footerPath": "#3465A4",
     "footerGit": "#75507B",
     "footerReason": "#2C7A39",
+    "footerThinking": "#999999",
     "footerName": "#333333",
     "footerSession": "#8E7CC3",
     "footerAdd": "#2C7A39",

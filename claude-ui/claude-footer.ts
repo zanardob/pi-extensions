@@ -69,15 +69,8 @@ function prettyModel(id: string | undefined): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
-
 /** Hide the reasoning share below this percent (mirrors tmustier's usage insights). */
 const REASONING_MIN_PERCENT = 5;
-
-/** Theme key for a level: thinkingOff … thinkingMax (already in every theme). */
-function thinkingColorKey(level: string): string {
-  return THINKING_LEVELS.has(level) ? `thinking${level.charAt(0).toUpperCase()}${level.slice(1)}` : "footerDim";
-}
 
 /** Current effective thinking level; "off" when the model cannot reason. */
 function currentThinkingLevel(pi: ExtensionAPI, ctx: any): string | undefined {
@@ -183,7 +176,7 @@ export default function (pi: ExtensionAPI) {
           const thinking = currentThinkingLevel(pi, ctx);
           const line1Parts = [styled("footerModel", ` model: ${prettyModel(ctx.model?.id)}`), "  "];
           if (thinking) {
-            line1Parts.push(styled(thinkingColorKey(thinking), `thinking: ${thinking}`), "  ");
+            line1Parts.push(styled("footerThinking", `thinking: ${thinking}`), "  ");
           }
           // Share of output tokens that were hidden reasoning (provider-reported only).
           const reasoningShare =
@@ -193,8 +186,6 @@ export default function (pi: ExtensionAPI) {
           }
           line1Parts.push(
             styled("footerDim", contextWindow ? `context: ${Math.round(percent)}% / ${contextWindow}` : `context: ${Math.round(percent)}%`),
-            "  ",
-            styled("footerSession", `session: ${formatDuration(sessionAge)}`),
             "  ",
             styled("footerWarn", `cost: ${formatCost(total.cost.total)}`),
           );
@@ -223,10 +214,11 @@ export default function (pi: ExtensionAPI) {
           // Extension hints live on their own line, below the git status.
           const statusLine = statuses.length > 0 ? styled("footerDim", ` ${statuses.join("  ")}`) : undefined;
 
-          const nameLine = sessionName
-            ? styled("footerName", ` name: ${sessionName}`)
-            : undefined;
-          const lines = nameLine ? [nameLine, line1, line2, line3] : [line1, line2, line3];
+          const firstLineSegments: string[] = [];
+          if (sessionName) firstLineSegments.push(styled("footerName", `name: ${sessionName}`));
+          firstLineSegments.push(styled("footerSession", `session: ${formatDuration(sessionAge)}`));
+          const firstLine = ` ${firstLineSegments.join("  ")}`;
+          const lines = [firstLine, line1, line2, line3];
           if (statusLine) lines.push(statusLine);
           return lines.map((line) => truncateToWidth(line, width, ""));
         },
