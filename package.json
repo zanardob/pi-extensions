@@ -6,10 +6,7 @@
   "keywords": ["pi-package"],
   "pi": {
     "extensions": [
-      "./claude-ui/claude-editor.ts",
-      "./claude-ui/claude-footer.ts",
-      "./claude-ui/claude-tools.ts",
-      "./claude-ui/claude-uniform.ts",
+      "./claude-ui/index.ts",
       "./voice-dictation/index.ts",
       "./usage/usage.ts",
       "./aliases/index.ts"

@@ -12,11 +12,8 @@
   },
   "files": [
     "aliases/index.ts",
+    "claude-ui/index.ts",
     "voice-dictation/index.ts",
-    "claude-ui/claude-editor.ts",
-    "claude-ui/claude-footer.ts",
-    "claude-ui/claude-tools.ts",
-    "claude-ui/claude-uniform.ts",
     "usage/usage.ts"
   ]
 }

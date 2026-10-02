@@ -11,10 +11,7 @@
   },
   "pi": {
     "extensions": [
-      "claude-editor.ts",
-      "claude-footer.ts",
-      "claude-tools.ts",
-      "claude-uniform.ts"
+      "index.ts"
     ],
     "themes": [
       "themes/claude-dark.json",

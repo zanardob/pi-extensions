@@ -1,0 +1,21 @@
+/**
+ * claude-ui — Claude-style editor, footer, tool rendering, and themes for Pi.
+ *
+ * Single extension entry point that composes the feature modules:
+ *   claude-editor  — bordered editor and working indicator
+ *   claude-footer  — footer with cwd, git branch, model, usage, statuses
+ *   claude-tools   — Claude-style rendering for the built-in tools
+ *   claude-uniform — uniform tool-call rows and streamed output
+ */
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import editor from "./claude-editor.ts";
+import footer from "./claude-footer.ts";
+import tools from "./claude-tools.ts";
+import uniform from "./claude-uniform.ts";
+
+export default function (pi: ExtensionAPI) {
+  editor(pi);
+  footer(pi);
+  tools(pi);
+  uniform(pi);
+}
