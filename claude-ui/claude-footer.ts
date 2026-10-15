@@ -1,18 +1,92 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { Usage } from "@earendil-works/pi-ai";
-import { truncateToWidth } from "@earendil-works/pi-tui";
+import { parseColor, truncateToWidth } from "@earendil-works/pi-tui";
 import { execFile } from "node:child_process";
 
+// Claude Code's footer palette, moved here when Pi 1.2.0 made theme JSON
+// validation strict (custom color tokens under `colors` are rejected).
+// `claude-dark` mirrors Claude Code's dark-ansi theme, so its footer colors
+// stay palette indices that resolve through the user's own terminal palette;
+// `claude-light` uses the fixed RGB values from ccstatusline's truecolor
+// table, matching the rest of that theme. The theme files no longer carry
+// these keys, so keep the two tables in sync when the Claude themes change.
+const CLAUDE_DARK_FOOTER: Record<string, string | number> = {
+  footerModel: 6, // cyan
+  footerDim: 8, // bright black
+  footerWarn: 3, // yellow
+  footerPath: 4, // blue
+  footerGit: 5, // magenta
+  footerReason: 2, // green
+  footerThinking: "#9E9E9E",
+  footerName: 7, // white
+  footerSession: "#B39DDB",
+  footerAdd: 2, // green
+  footerDel: 1, // red
+};
+
+const CLAUDE_LIGHT_FOOTER: Record<string, string | number> = {
+  footerModel: "#06989A",
+  footerDim: "#6E6E6E",
+  footerWarn: "#C4A000",
+  footerPath: "#3465A4",
+  footerGit: "#75507B",
+  footerReason: "#2C7A39",
+  footerThinking: "#999999",
+  footerName: "#333333",
+  footerSession: "#8E7CC3",
+  footerAdd: "#2C7A39",
+  footerDel: "#AB2B3F",
+};
+
+// When another theme is active, map the footer roles onto official tokens so
+// the footer keeps sensible colors instead of going monochrome.
+const FOOTER_TOKEN_FALLBACK: Record<string, string> = {
+  footerModel: "accent",
+  footerDim: "dim",
+  footerWarn: "warning",
+  footerPath: "mdLink",
+  footerGit: "syntaxKeyword",
+  footerReason: "success",
+  footerThinking: "muted",
+  footerName: "text",
+  footerSession: "customMessageLabel",
+  footerAdd: "toolDiffAdded",
+  footerDel: "toolDiffRemoved",
+};
+
+function claudeFooterPalette(theme: any): Record<string, string | number> | undefined {
+  if (theme?.name === "claude-dark") return CLAUDE_DARK_FOOTER;
+  if (theme?.name === "claude-light") return CLAUDE_LIGHT_FOOTER;
+  return undefined;
+}
+
 // Defensive theme helpers: fall back to identity functions if the theme
-// implementation does not expose fg/bold, or a colour key is missing in the
-// active theme (a missing key must never crash the TUI).
+// implementation does not expose fg/bold/style, or a colour key is missing in
+// the active theme (a missing key must never crash the TUI).
 function makeStyle(theme: any) {
+  const canStyle = typeof theme?.style === "function";
   const fg =
     typeof theme?.fg === "function"
       ? (color: string, text: string) => {
           try {
             return theme.fg(color, text);
           } catch {
+            // Not an official theme token: use the Claude palette while a
+            // claude-* theme is active, otherwise an official token. Resolved
+            // per call (not captured at mount) so a later theme switch, e.g.
+            // terminal light/dark, switches the palette with it.
+            const raw = claudeFooterPalette(theme)?.[color];
+            if (raw !== undefined && canStyle) {
+              return theme.style(text, { fg: parseColor(raw) });
+            }
+            const fallback = FOOTER_TOKEN_FALLBACK[color];
+            if (fallback) {
+              try {
+                return theme.fg(fallback, text);
+              } catch {
+                return text;
+              }
+            }
             return text;
           }
         }
@@ -168,11 +242,8 @@ export default function (pi: ExtensionAPI) {
           const branch = footerData.getGitBranch();
           const sessionName = pi.getSessionName();
 
-          // footer* theme keys mirror ccstatusline's truecolor table so the
-          // footer matches Claude Code's: model teal, ctx grey, session/cost
-          // amber, cwd blue, git purple (stats amber). Thinking uses the
-          // theme's own thinking<Level> colour (same key the editor border
-          // uses), so the footer always agrees with the active level.
+          // The Claude footer palette lives in makeStyle above: model teal,
+          // ctx grey, cost amber, cwd blue, git purple, stats green/red.
           const thinking = currentThinkingLevel(pi, ctx);
           const line1Parts = [styled("footerModel", ` model: ${prettyModel(ctx.model?.id)}`), "  "];
           if (thinking) {

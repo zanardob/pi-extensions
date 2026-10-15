@@ -1,7 +1,7 @@
 {
-  "$schema": "https://raw.githubusercontent.com/earendil-works/pi/main/packages/coding-agent/src/modes/interactive/theme/theme-schema.json",
+  "$schema": "https://pi.dev/schemas/theme.schema.json",
   "name": "claude-dark",
-  "comment": "Mirrors Claude Code's dark-ansi theme: colors 0-15 are named ANSI colors, so everything resolves through the user's own terminal palette (iTerm2). black=0 red=1 green=2 yellow=3 blue=4 magenta=5 cyan=6 white=7 + bright variants.",
+  "appearance": "dark",
   "vars": {
     "black": 0,
     "red": 1,
@@ -81,19 +81,7 @@
     "thinkingXhigh": "white",
     "thinkingMax": "white",
 
-    "bashMode": "magentaBright",
-
-    "footerModel": "cyan",
-    "footerDim": "blackBright",
-    "footerWarn": "yellow",
-    "footerPath": "blue",
-    "footerGit": "magenta",
-    "footerReason": "green",
-    "footerThinking": "#9E9E9E",
-    "footerName": "white",
-    "footerSession": "#B39DDB",
-    "footerAdd": "green",
-    "footerDel": "red"
+    "bashMode": "magentaBright"
   },
   "export": {
     "pageBg": "#000000",

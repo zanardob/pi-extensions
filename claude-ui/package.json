@@ -8,14 +8,5 @@
     "@earendil-works/pi-coding-agent": "*",
     "@earendil-works/pi-tui": "*",
     "@earendil-works/pi-ai": "*"
-  },
-  "pi": {
-    "extensions": [
-      "index.ts"
-    ],
-    "themes": [
-      "themes/claude-dark.json",
-      "themes/claude-light.json"
-    ]
   }
 }

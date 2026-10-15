@@ -1,7 +1,7 @@
 {
-  "$schema": "https://raw.githubusercontent.com/earendil-works/pi/main/packages/coding-agent/src/modes/interactive/theme/theme-schema.json",
+  "$schema": "https://pi.dev/schemas/theme.schema.json",
   "name": "claude-light",
-  "comment": "Hex port of Claude Code's `light` theme (src/utils/theme.ts) and its diff/syntax palette (src/native-ts/color-diff GITHUB_SCOPES), so colours are fixed RGB like CC instead of resolving through the terminal's ANSI palette. footer* keys mirror ccstatusline's truecolor table (cyan #06989A, yellow #C4A000, brightBlack #555753, blue #3465A4, magenta #75507B). CC-style tinted diff line backgrounds live in the claude-footer extension's edit-tool render override.",
+  "appearance": "light",
   "colors": {
     "accent": "#D77757",
     "border": "#999999",
@@ -63,19 +63,7 @@
     "thinkingXhigh": "#999999",
     "thinkingMax": "#999999",
 
-    "bashMode": "#8700FF",
-
-    "footerModel": "#06989A",
-    "footerDim": "#6E6E6E",
-    "footerWarn": "#C4A000",
-    "footerPath": "#3465A4",
-    "footerGit": "#75507B",
-    "footerReason": "#2C7A39",
-    "footerThinking": "#999999",
-    "footerName": "#333333",
-    "footerSession": "#8E7CC3",
-    "footerAdd": "#2C7A39",
-    "footerDel": "#AB2B3F"
+    "bashMode": "#8700FF"
   },
   "export": {
     "pageBg": "#ffffff",
