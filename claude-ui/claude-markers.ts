@@ -37,7 +37,6 @@ const SGR_RUN = /^((?:\x1b\[[0-9;]*m)*)/;
 const ANSI = /\x1b\[[0-9;]*m|\x1b\][^\x07]*\x07/g;
 /** Terminal image protocols own the whole line; a prefix would corrupt them. */
 const IMAGE = /^\x1b(_G|]1337;)/;
-const patched = Symbol.for("claude-ui.markers");
 
 type Prefix = (line: string, first: boolean) => string;
 
@@ -88,22 +87,37 @@ const promptPrefix: Prefix = (line, first) => {
 
 /** Wrap one component's render: two columns narrower, then the gutter goes back on. */
 function wrapRender(component: { render(width: number): string[] }, prefix: Prefix): void {
-  const instance = component as { render: (width: number) => string[]; [patched]?: boolean };
-  if (instance[patched]) return;
-  const render = instance.render.bind(component);
+  const instance = component as { render: (width: number) => string[]; [replaced]?: (width: number) => string[] };
+  if ((instance as any)[legacy]) return;
+  const render = instance[replaced] ?? instance.render.bind(component);
+  instance[replaced] = render;
   instance.render = (width: number) => (width >= MIN_WIDTH ? addGutter(render(width - GUTTER), prefix) : render(width));
-  instance[patched] = true;
 }
 
+/**
+ * Where a patch keeps the method it replaced. pi reloads extensions inside the
+ * running process, and the two component classes outlive them, so a reload has to
+ * swap the code in its own patch instead of leaving the first one in place.
+ */
+const replaced = Symbol.for("claude-ui.markers.replaced");
+/** Guard of the first version of this patch, which kept no way back to the method
+ *  it replaced. That wrapper cannot be removed, so a process still carrying it
+ *  needs one restart; the patch skips itself rather than wrapping it twice. */
+const legacy = Symbol.for("claude-ui.markers");
+
 function patchMethod(target: any, method: string, name: string, wrap: (original: (...args: any[]) => any) => (...args: any[]) => any, problems: string[]): void {
-  const original = target?.[method];
-  if (typeof original !== "function") {
+  const current = target?.[method];
+  if (typeof current !== "function") {
     problems.push(`${name}.${method} is gone`);
     return;
   }
-  if (original[patched]) return;
+  if (current[legacy]) {
+    problems.push(`${name}.${method} still carries an older claude-ui patch — restart pi to replace it`);
+    return;
+  }
+  const original = current[replaced] ?? current;
   const replacement: any = wrap(original);
-  replacement[patched] = true;
+  replacement[replaced] = original;
   target[method] = replacement;
 }
 
