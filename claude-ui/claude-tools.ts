@@ -372,6 +372,23 @@ function renderUpdateResult(diffText: string, lang: string | undefined, expanded
 // Extension registration
 // ============================================================================
 
+// ============================================================================
+// File-tool guidelines
+// ============================================================================
+
+// Some models default to shell heredocs and sed even with pi's own guidance.
+// Preferring the file tools also means the change is drawn as a diff.
+const FILE_TOOL_GUIDELINES: Record<string, string[]> = {
+  read: ["Use read to view file contents instead of cat, head, tail or sed -n in bash."],
+  edit: [
+    "Use edit to change existing files instead of bash: never modify files with sed -i, perl -pi, python or node scripts, or shell redirection.",
+  ],
+  write: [
+    "Use write to create new files or fully rewrite small ones instead of bash: never create files with cat <<EOF, echo or printf redirection, tee, or python scripts.",
+    "write creates missing parent directories itself, so call it directly instead of combining mkdir -p with a heredoc in bash.",
+  ],
+};
+
 /** Path shown by the listing tools, relative to the session cwd. */
 const listingPath = (value: unknown, cwd: string | undefined, fallback: string): string => {
   const raw = typeof value === "string" && value !== "" ? value : fallback;
@@ -546,6 +563,15 @@ export default function (pi: ExtensionAPI) {
   // chain (and finally the tool's own renderers), so a tool we do not handle
   // falls through to pi or to another extension.
   pi.registerToolRenderer((toolName, next) => RENDERERS[toolName]?.(next()) ?? next());
+
+  // pi only lists a tool's guidelines while the tool is on.
+  pi.on("before_agent_start", async (event) => {
+    const guidelines = event.systemPromptOptions.toolGuidelines;
+    for (const [name, rules] of Object.entries(FILE_TOOL_GUIDELINES)) {
+      const existing = guidelines[name] ?? [];
+      guidelines[name] = [...existing, ...rules.filter((rule) => !existing.includes(rule))];
+    }
+  });
 
   // ---- Assistant ● ---------------------------------------------------------
 
