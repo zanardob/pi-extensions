@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { CustomEditor } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { truncateToWidth } from "@earendil-works/pi-tui";
 import { claudeState } from "./claude-shared/state.ts";
 
 /** Strip SGR + OSC sequences (incl. the zero-width hardware-cursor marker). */
@@ -64,69 +64,7 @@ class ClaudeEditor extends CustomEditor {
   }
 }
 
-/** Greedy word wrap that never leaves a wider line than `width`. */
-function wrapPlain(line: string, width: number): string[] {
-  if (visibleWidth(line) <= width) return [line];
-  const words = line.split(" ");
-  const pieces: string[] = [];
-  let current = "";
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (visibleWidth(candidate) <= width || !current) {
-      current = candidate;
-    } else {
-      pieces.push(current);
-      current = word;
-    }
-  }
-  if (current) pieces.push(current);
-  return pieces;
-}
-
-const NBSP = "\u00a0";
-
-/**
- * Claude-style prompt gutter for user messages in the transcript.
- * The markdown lexer trims leading spaces on continuation lines, so the
- * gutter uses NBSP + space — visually identical, but it survives parsing.
- * Code fences are left untouched so blocks still render correctly.
- */
-function addPromptGutter(markdown: string, availableWidth: number | undefined): string {
-  const wrapAt = Math.max(10, Math.floor(availableWidth ?? 80) - 2);
-  const lines = markdown.split("\n");
-  const out: string[] = [];
-  let inFence = false;
-  let arrowUsed = false;
-  for (const line of lines) {
-    if (/^\s*(```|~~~)/.test(line)) {
-      // A message that starts with a code block has no safe place for the arrow.
-      if (!arrowUsed && out.length === 0) arrowUsed = true;
-      inFence = !inFence;
-      out.push(line);
-      continue;
-    }
-    if (inFence || line.trim() === "") {
-      out.push(line);
-      continue;
-    }
-    const pieces = wrapPlain(line, wrapAt);
-    for (const piece of pieces) {
-      const prefix = arrowUsed ? `${NBSP} ` : "❯ ";
-      arrowUsed = true;
-      out.push(prefix + piece);
-    }
-  }
-  return out.join("\n");
-}
-
 export default function (pi: ExtensionAPI) {
-  // Claude-style "❯" prefix + aligned continuation lines on user messages in
-  // the transcript (render-time only; stored messages and LLM context unchanged).
-  pi.registerMarkdownTransformer((markdown, context) => {
-    if (context.messageType !== "user") return markdown;
-    return addPromptGutter(markdown, (context as { availableWidth?: number }).availableWidth);
-  });
-
   pi.on("session_start", (_event, ctx) => {
     ctx.ui.setEditorComponent((tui, theme, keybindings) => new ClaudeEditor(tui, theme, keybindings));
   });

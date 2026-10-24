@@ -35,7 +35,6 @@ import {
 // Style rules:
 //   - Plain (lowercase) tool names: bash(), read(), write(), edit().
 //   - Status dots: gray ● while running, green when done, red on error.
-//   - Assistant messages get a leading white circle (●), like Claude Code.
 //   - Only edit shows a diff — bash/read/write never do.
 //   - the app.tools.expand key gives every tool a meaningful expanded state:
 //     bash 20 → 500 line cap, read shows the file content, edit shows the
@@ -573,28 +572,13 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
-  // ---- Assistant ● ---------------------------------------------------------
+  // ---- Thinking lines ------------------------------------------------------
 
-  // Leading circle on assistant messages, like Claude Code. Markdown
-  // transformers can't inject ANSI, so the dot renders in the default
-  // foreground color (visually white). Messages starting with structural
-  // markdown (fences, headings, quotes, lists, tables) are left untouched so
-  // rendering doesn't break.
+  // The expand key collapses thinking runs to a one-line summary (styled
+  // dim/italic by the built-in thinking renderer); expanded shows the text.
+  // Assistant and user markers are drawn by claude-markers.ts.
   pi.registerMarkdownTransformer((markdown, context) => {
-    // The expand key collapses thinking runs to a one-line summary (styled
-    // dim/italic by the built-in thinking renderer); expanded shows the text.
-    if (context.messageType === "assistant-thinking") {
-      return claudeState.thinkingExpanded ? markdown : `· thinking… (${keyHint("app.tools.expand", "to expand")})`;
-    }
-    if (context.messageType !== "assistant") return markdown;
-    const lines = markdown.split("\n");
-    for (let i = 0; i < lines.length; i++) {
-      const trimmed = lines[i].trim();
-      if (trimmed === "") continue;
-      if (/^(```|~~~|#|>|\||([-*+]|\d+[.)])\s)/.test(trimmed)) return markdown;
-      lines[i] = lines[i].replace(/^(\s*)/, "$1● ");
-      return lines.join("\n");
-    }
-    return markdown;
+    if (context.messageType !== "assistant-thinking") return markdown;
+    return claudeState.thinkingExpanded ? markdown : `· thinking… (${keyHint("app.tools.expand", "to expand")})`;
   });
 }
