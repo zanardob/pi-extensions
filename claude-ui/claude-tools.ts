@@ -48,9 +48,9 @@ const BASH_CALL_MAX_LINES = 5;
 
 // ============================================================================
 // Claude-Code-style edit diff rendering.
-// Port of CC native-ts/color-diff "light": full-row pastel line backgrounds,
-// syntax-highlighted line text (decoration colour where untokenised), and a
-// stronger background on word-level changes. Rendered per hunk, never folded.
+// Port of CC native-ts/color-diff: full-row line backgrounds that follow the
+// theme's appearance, syntax-highlighted line text (decoration colour where
+// untokenised), and a stronger background on the words that changed.
 // ============================================================================
 
 const tokenizeWords = (s: string): string[] => s.match(/\w+|\s+|[^\w\s]/g) ?? [];
@@ -236,11 +236,11 @@ const CONTEXT_LINES = 3;
 const DIFF_PREVIEW_LINES = 16;
 
 /**
- * Full edit result rendering, Claude-Code-style: a single
- * `⎿  Added X lines, removed Y lines` header, then every diff line below it —
- * changed lines with green/red numbers and pastel backgrounds, and (collapsed
- * only) up to 3 context lines around each change with `...` between distant
- * hunks. Expanded shows the diff untrimmed.
+ * Edit result rendering, Claude-Code-style: a single
+ * `⎿  Added X lines, removed Y lines` header, then the diff below it — changed
+ * lines with tinted numbers and bands, and (collapsed only) up to 3 context
+ * lines around each change with `...` between distant hunks. The caller caps
+ * the preview; expanded shows the diff untrimmed.
  */
 function renderUpdateResult(diffText: string, lang: string | undefined, expanded: boolean, theme: any): Row[] {
   const entries: DiffEntry[] = [];
