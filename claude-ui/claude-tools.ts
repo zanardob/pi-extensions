@@ -600,6 +600,6 @@ export default function (pi: ExtensionAPI) {
     if (claudeState.thinkingExpanded) return markdown;
     if (context.isStreaming && thinkingIsLast) return "";
     const tokens = formatTokens(Math.round(markdown.length / CHARS_PER_TOKEN));
-    return `● think()  \n⎿ ${tokens} tokens (${keyHint("app.tools.expand", "to expand")})`;
+    return `● think()  \n⎿  ${tokens} tokens (${keyHint("app.tools.expand", "to expand")})`;
   });
 }
