@@ -178,6 +178,12 @@ export function elapsed(ms: number): string {
   return `${m}m ${s}s`;
 }
 
+/** Tokens per character of streamed text, for the estimate shown before a usage count lands. */
+export const CHARS_PER_TOKEN = 4;
+
+/** `412`, `1.2k`, `12.3k` — enough precision to see the number move. */
+export const formatTokens = (tokens: number): string => (tokens < 1000 ? String(tokens) : `${(tokens / 1000).toFixed(1)}k`);
+
 // ============================================================================
 // Shared per-row timing
 //

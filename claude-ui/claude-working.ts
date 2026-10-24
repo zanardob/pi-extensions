@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { C } from "./claude-shared/style.ts";
+import { C, CHARS_PER_TOKEN, formatTokens } from "./claude-shared/style.ts";
 
 // ============================================================================
 // Working line above the editor: what the run is doing now, how long it has
@@ -23,8 +23,6 @@ const UNDIM = "\x1b[22m";
 const FRAMES = ["·", "✢", "✱", "✶", "✻", "✽", "✻", "✶", "✱", "✢"].map((frame) => `${ORANGE}${frame}${C.reset}`);
 const FRAME_MS = 120;
 const TICK_MS = 1000;
-/** Tokens per character of streamed text, for the live estimate. */
-const CHARS_PER_TOKEN = 4;
 /** Longer phases wrap the row onto a second line, which shifts the editor. */
 const PHASE_MAX = 40;
 /** Claude Code's spinner verbs (`constants/spinnerVerbs.ts`), minus the ones branded
@@ -87,9 +85,6 @@ const clip = (text: string): string => (text.length > PHASE_MAX - 1 ? text.slice
 const baseName = (value: unknown): string => (typeof value === "string" && value ? value.split("/").pop() || value : "");
 
 const firstLine = (value: unknown): string => (typeof value === "string" ? value.split("\n")[0] : "");
-
-/** `412`, `1.2k`, `12.3k` — enough precision to see the number move. */
-const formatTokens = (tokens: number): string => (tokens < 1000 ? String(tokens) : `${(tokens / 1000).toFixed(1)}k`);
 
 /** What a running tool is doing, in the same vocabulary as its transcript row. */
 function toolPhase(name: string, args: any): string {

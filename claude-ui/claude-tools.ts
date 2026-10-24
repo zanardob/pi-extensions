@@ -3,6 +3,7 @@ import { getLanguageFromPath, highlightCode, keyHint, type ToolRenderers } from 
 import { claudeState } from "./claude-shared/state.ts";
 import {
   C,
+  CHARS_PER_TOKEN,
   CTX_NUM_FG,
   DIFF_INDENT,
   ERROR_FG,
@@ -12,6 +13,7 @@ import {
   bold,
   diffPalette,
   dotFor,
+  formatTokens,
   link,
   paintOn,
   relativePath,
@@ -574,15 +576,30 @@ export default function (pi: ExtensionAPI) {
 
   // ---- Thinking lines ------------------------------------------------------
 
-  // The expand key collapses thinking runs to a one-line summary (styled
-  // dim/italic by the built-in thinking renderer); expanded shows the text.
-  // While the block is still streaming the expand hint would advertise a
-  // finished block, so it waits for the message to settle.
+  // A finished thought is drawn like a tool call: `● think()` with the size of
+  // the run under it. The expand key shows the raw text instead, dim/italic in
+  // the built-in thinking style.
+  //
+  // While the block is the last thing arriving it stays hidden — the working
+  // line above the editor already says what is happening. `isStreaming` is per
+  // message, so the flag below is what makes the row appear as soon as the model
+  // moves on to text instead of at the end of the message.
+  let thinkingIsLast = false;
+  pi.on("message_start", (event) => {
+    if (event.message.role === "assistant") thinkingIsLast = false;
+  });
+  pi.on("message_update", (event) => {
+    if (event.message.role !== "assistant") return;
+    const content = (event.message as any).content ?? [];
+    thinkingIsLast = content[content.length - 1]?.type === "thinking";
+  });
+
   // Assistant and user markers are drawn by claude-markers.ts.
   pi.registerMarkdownTransformer((markdown, context) => {
     if (context.messageType !== "assistant-thinking") return markdown;
     if (claudeState.thinkingExpanded) return markdown;
-    if (context.isStreaming) return "· thinking…";
-    return `· thinking… (${keyHint("app.tools.expand", "to expand")})`;
+    if (context.isStreaming && thinkingIsLast) return "";
+    const tokens = formatTokens(Math.round(markdown.length / CHARS_PER_TOKEN));
+    return `● think()  \n⎿ ${tokens} tokens (${keyHint("app.tools.expand", "to expand")})`;
   });
 }
