@@ -232,6 +232,8 @@ const parseDiffLine = (line: string): DiffEntry | null => {
 
 /** Context lines shown around each change; pi's diff carries 4, we trim to 3. */
 const CONTEXT_LINES = 3;
+/** Diff lines shown before the preview is cut; the expand key shows the rest. */
+const DIFF_PREVIEW_LINES = 16;
 
 /**
  * Full edit result rendering, Claude-Code-style: a single
@@ -477,7 +479,17 @@ const RENDERERS: Record<string, Build> = {
       if (rows.length === 0) {
         return fallback?.renderResult?.(result, options, theme, context) ?? renderStreamedOutput(result, options, context);
       }
-      return new LinesComponent(rows);
+      // rows[0] is the summary line; the rest is the diff itself.
+      const over = rows.length - 1 - DIFF_PREVIEW_LINES;
+      if (options.expanded || over <= 0) return new LinesComponent(rows);
+      const shownRows = rows.slice(0, 1 + DIFF_PREVIEW_LINES);
+      shownRows.push(
+        row(
+          " ".repeat(DIFF_INDENT) +
+            `${MUTED}… +${over} ${over === 1 ? "line" : "lines"}${C.reset} (${keyHint("app.tools.expand", "to expand")})`,
+        ),
+      );
+      return new LinesComponent(shownRows);
     },
   }),
 
