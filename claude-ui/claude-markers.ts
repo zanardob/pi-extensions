@@ -30,9 +30,10 @@ const GUTTER = 2;
 const MIN_WIDTH = GUTTER + 3;
 const DIM = "\x1b[2m";
 const UNDIM = "\x1b[22m";
-/** Zero-width OSC 133 shell-integration zones, which pi puts at the start of a row. */
+/** Zero-width sequences: OSC 133 shell-integration zones, which pi puts at the
+ *  start of a row, and its styling. */
 const ZONE = /^((?:\x1b\][^\x07]*\x07)*)/;
-const SGR_RUN = /^((?:\x1b\[[0-9;]*m)+)/;
+const SGR_RUN = /^((?:\x1b\[[0-9;]*m)*)/;
 const ANSI = /\x1b\[[0-9;]*m|\x1b\][^\x07]*\x07/g;
 /** Terminal image protocols own the whole line; a prefix would corrupt them. */
 const IMAGE = /^\x1b(_G|]1337;)/;
@@ -61,7 +62,18 @@ function addGutter(lines: string[], prefix: Prefix): string[] {
   });
 }
 
-const replyPrefix: Prefix = (_line, first) => (first ? `${REPLY} ` : "  ");
+/**
+ * `mark` on the first line with text, two blank columns on the rest. The marker
+ * sits where a tool row puts its status dot: one column in when the row carries
+ * pi's padding, at the very start when it does not.
+ */
+function markerGutter(mark: string, line: string, first: boolean): string {
+  if (!first) return "  ";
+  const carried = SGR_RUN.exec(line)?.[1] ?? "";
+  return line.charAt(carried.length) === " " ? ` ${mark}` : `${mark} `;
+}
+
+const replyPrefix: Prefix = (line, first) => markerGutter(REPLY, line, first);
 
 /**
  * The prompt arrow sits inside the message's background band, so it re-emits the
@@ -70,7 +82,7 @@ const replyPrefix: Prefix = (_line, first) => (first ? `${REPLY} ` : "  ");
  */
 const promptPrefix: Prefix = (line, first) => {
   const carried = SGR_RUN.exec(line)?.[1];
-  const mark = first ? `${DIM}${PROMPT}${UNDIM} ` : "  ";
+  const mark = markerGutter(`${DIM}${PROMPT}${UNDIM}`, line, first);
   return carried ? carried + mark + C.reset : mark;
 };
 
