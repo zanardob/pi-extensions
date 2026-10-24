@@ -1,15 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import {
-  createBashToolDefinition,
-  createEditToolDefinition,
-  createFindToolDefinition,
-  createGrepToolDefinition,
-  createLsToolDefinition,
-  createReadToolDefinition,
-  createWriteToolDefinition,
-  getLanguageFromPath,
-  highlightCode,
-} from "@earendil-works/pi-coding-agent";
+import { getLanguageFromPath, highlightCode, type ToolRenderers } from "@earendil-works/pi-coding-agent";
 import { claudeState } from "./claude-shared/state.ts";
 import {
   C,
@@ -35,8 +25,9 @@ import {
 // plus grep/find/ls). Shared primitives live in ./claude-shared/style.ts;
 // claude-uniform.ts applies the same look to every other tool.
 //
-// Rendering only: every override delegates execute() to the original tool, so
-// behavior, permissions, hooks and command rewriting (e.g. RTK) are untouched.
+// Rendering only: `registerToolRenderer` replaces how a call is drawn, never
+// the tool itself, so schemas, execution, permissions, hooks and command
+// rewriting (e.g. RTK) are untouched.
 // No file I/O happens in any renderer, so streaming and expansion stay smooth.
 //
 // Style rules:
@@ -303,46 +294,23 @@ function renderUpdateResult(diffText: string, lang: string | undefined, expanded
 // Extension registration
 // ============================================================================
 
-export default function (pi: ExtensionAPI) {
-  // Per-cwd cache of the built-in tool definitions we delegate to.
-  type Defs = {
-    bash: ReturnType<typeof createBashToolDefinition>;
-    read: ReturnType<typeof createReadToolDefinition>;
-    write: ReturnType<typeof createWriteToolDefinition>;
-    edit: ReturnType<typeof createEditToolDefinition>;
-    grep: ReturnType<typeof createGrepToolDefinition>;
-    find: ReturnType<typeof createFindToolDefinition>;
-    ls: ReturnType<typeof createLsToolDefinition>;
-  };
-  const defsCache = new Map<string, Defs>();
-  const defsFor = (cwd: string): Defs => {
-    let defs = defsCache.get(cwd);
-    if (!defs) {
-      defs = {
-        bash: createBashToolDefinition(cwd) as any,
-        read: createReadToolDefinition(cwd) as any,
-        write: createWriteToolDefinition(cwd) as any,
-        edit: createEditToolDefinition(cwd) as any,
-        grep: createGrepToolDefinition(cwd) as any,
-        find: createFindToolDefinition(cwd) as any,
-        ls: createLsToolDefinition(cwd) as any,
-      };
-      defsCache.set(cwd, defs);
-    }
-    return defs;
-  };
+/** Path shown by the listing tools, relative to the session cwd. */
+const listingPath = (value: unknown, cwd: string | undefined, fallback: string): string => {
+  const raw = typeof value === "string" && value !== "" ? value : fallback;
+  return link(relativePath(raw, cwd));
+};
 
+/** Builds one tool's renderers; `fallback` is pi's own renderer for that tool. */
+type Build = (fallback: ToolRenderers | undefined) => ToolRenderers;
+
+const RENDERERS: Record<string, Build> = {
   // ---- Bash ----------------------------------------------------------------
 
-  pi.registerTool({
-    ...(defsFor(process.cwd()).bash as any),
+  bash: () => ({
     // Render our own shell: skips pi's default Box (Spacer + paddingY), which
     // put two blank lines between the model's text and tool rows. One blank
     // line remains, matching Claude Code; the gutter keeps alignment.
     renderShell: "self",
-    async execute(id: any, params: any, signal: any, onUpdate: any, ctx: any) {
-      return defsFor(ctx.cwd).bash.execute(id, params, signal, onUpdate, ctx);
-    },
     renderCall(args: any, theme: any, context: any) {
       startTiming(context);
       const command = typeof args?.command === "string" ? args.command : "";
@@ -366,16 +334,12 @@ export default function (pi: ExtensionAPI) {
       // listing tools and the generic uniform renderer in claude-uniform.ts).
       return renderStreamedOutput(result, options, context);
     },
-  } as any);
+  }),
 
   // ---- Read ----------------------------------------------------------------
 
-  pi.registerTool({
-    ...(defsFor(process.cwd()).read as any),
+  read: (fallback) => ({
     renderShell: "self",
-    async execute(id: any, params: any, signal: any, onUpdate: any, ctx: any) {
-      return defsFor(ctx.cwd).read.execute(id, params, signal, onUpdate, ctx);
-    },
     renderCall(args: any, theme: any, context: any) {
       const p = typeof args?.path === "string" ? args.path : typeof args?.file_path === "string" ? args.file_path : "";
       const display = p ? relativePath(p, context.cwd) : theme.fg("toolOutput", "...");
@@ -396,21 +360,17 @@ export default function (pi: ExtensionAPI) {
       // Expanded (ctrl+o): show the full content via the built-in renderer,
       // like pi does natively. Collapsed stays a one-line summary.
       if (lines.length === 0 || options.expanded) {
-        return defsFor(context.cwd).read.renderResult!(result, options, theme, context);
+        return fallback?.renderResult?.(result, options, theme, context) ?? renderStreamedOutput(result, options, context);
       }
       const suffix = result?.details?.truncation?.truncated ? " (truncated)" : "";
       return new LinesComponent([row(`${MUTED}⎿${C.reset}  Read ${lines.length} ${lines.length === 1 ? "line" : "lines"}${suffix}`)]);
     },
-  } as any);
+  }),
 
   // ---- Write ---------------------------------------------------------------
 
-  pi.registerTool({
-    ...(defsFor(process.cwd()).write as any),
+  write: () => ({
     renderShell: "self",
-    async execute(id: any, params: any, signal: any, onUpdate: any, ctx: any) {
-      return defsFor(ctx.cwd).write.execute(id, params, signal, onUpdate, ctx);
-    },
     renderCall(args: any, theme: any, context: any) {
       const p = typeof args?.path === "string" ? args.path : typeof args?.file_path === "string" ? args.file_path : "";
       const display = p ? relativePath(p, context.cwd) : theme.fg("toolOutput", "...");
@@ -422,16 +382,12 @@ export default function (pi: ExtensionAPI) {
       }
       return new LinesComponent([row(`${MUTED}⎿${C.reset}  Written`)]);
     },
-  } as any);
+  }),
 
   // ---- Update (edit) -------------------------------------------------------
 
-  pi.registerTool({
-    ...(defsFor(process.cwd()).edit as any),
+  edit: (fallback) => ({
     renderShell: "self",
-    async execute(id: any, params: any, signal: any, onUpdate: any, ctx: any) {
-      return defsFor(ctx.cwd).edit.execute(id, params, signal, onUpdate, ctx);
-    },
     renderCall(args: any, theme: any, context: any) {
       const p = typeof args?.path === "string" ? args.path : typeof args?.file_path === "string" ? args.file_path : "";
       const display = p ? relativePath(p, context.cwd) : theme.fg("toolOutput", "...");
@@ -441,32 +397,20 @@ export default function (pi: ExtensionAPI) {
       const diff = !context.isError ? (result?.details?.diff as string | undefined) : undefined;
       const path = context.args?.path ?? context.args?.file_path;
       const lang = typeof path === "string" ? getLanguageFromPath(path) : undefined;
-      if (!diff) {
-        return defsFor(context.cwd).edit.renderResult!(result, options, theme, context);
-      }
-      const rows = renderUpdateResult(diff, lang, options.expanded === true);
+      const rows = diff ? renderUpdateResult(diff, lang, options.expanded === true) : [];
       if (rows.length === 0) {
-        return defsFor(context.cwd).edit.renderResult!(result, options, theme, context);
+        return fallback?.renderResult?.(result, options, theme, context) ?? renderStreamedOutput(result, options, context);
       }
       return new LinesComponent(rows);
     },
-  } as any);
+  }),
 
   // ---- Grep / Find / Ls -----------------------------------------------------
 
   // The listing tools share the shell tools' result body (`⎿ done in 1.2s
   // (12 lines)` + indented output) so every built-in tool reads the same way.
-  const listingPath = (value: unknown, cwd: string | undefined, fallback: string): string => {
-    const raw = typeof value === "string" && value !== "" ? value : fallback;
-    return link(relativePath(raw, cwd));
-  };
-
-  pi.registerTool({
-    ...(defsFor(process.cwd()).grep as any),
+  grep: () => ({
     renderShell: "self",
-    async execute(id: any, params: any, signal: any, onUpdate: any, ctx: any) {
-      return defsFor(ctx.cwd).grep.execute(id, params, signal, onUpdate, ctx);
-    },
     renderCall(args: any, _theme: any, context: any) {
       startTiming(context);
       const pattern = typeof args?.pattern === "string" ? args.pattern : "";
@@ -478,14 +422,10 @@ export default function (pi: ExtensionAPI) {
     renderResult(result: any, options: any, _theme: any, context: any) {
       return renderStreamedOutput(result, options, context);
     },
-  } as any);
+  }),
 
-  pi.registerTool({
-    ...(defsFor(process.cwd()).find as any),
+  find: () => ({
     renderShell: "self",
-    async execute(id: any, params: any, signal: any, onUpdate: any, ctx: any) {
-      return defsFor(ctx.cwd).find.execute(id, params, signal, onUpdate, ctx);
-    },
     renderCall(args: any, _theme: any, context: any) {
       startTiming(context);
       const pattern = typeof args?.pattern === "string" ? args.pattern : "";
@@ -496,14 +436,10 @@ export default function (pi: ExtensionAPI) {
     renderResult(result: any, options: any, _theme: any, context: any) {
       return renderStreamedOutput(result, options, context);
     },
-  } as any);
+  }),
 
-  pi.registerTool({
-    ...(defsFor(process.cwd()).ls as any),
+  ls: () => ({
     renderShell: "self",
-    async execute(id: any, params: any, signal: any, onUpdate: any, ctx: any) {
-      return defsFor(ctx.cwd).ls.execute(id, params, signal, onUpdate, ctx);
-    },
     renderCall(args: any, _theme: any, context: any) {
       startTiming(context);
       const limit = args?.limit !== undefined ? `${MUTED} (limit ${args.limit})${C.reset}` : "";
@@ -513,7 +449,15 @@ export default function (pi: ExtensionAPI) {
     renderResult(result: any, options: any, _theme: any, context: any) {
       return renderStreamedOutput(result, options, context);
     },
-  } as any);
+  }),
+};
+
+export default function (pi: ExtensionAPI) {
+  // Renderers only: pi keeps its own tool definitions, schemas, execution,
+  // permissions, hooks and on/off state. `next()` is the rest of the resolver
+  // chain (and finally the tool's own renderers), so a tool we do not handle
+  // falls through to pi or to another extension.
+  pi.registerToolRenderer((toolName, next) => RENDERERS[toolName]?.(next()) ?? next());
 
   // ---- Assistant ● ---------------------------------------------------------
 
