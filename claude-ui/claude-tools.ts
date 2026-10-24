@@ -142,11 +142,18 @@ function injectWordBg(styled: string, spans: { start: number; end: number }[], w
   return out;
 }
 
-function highlightLine(content: string, lang: string | undefined, lineBg: string | null): string {
-  const styled = (highlightCode(content, lang) ?? [content])[0] ?? content;
-  // A full reset inside the highlighter would also kill the line background;
-  // re-emit it right after so the tint survives.
-  return lineBg ? paintOn(styled, lineBg) : styled;
+/**
+ * Syntax-highlight every diff body as one snippet, so multi-line strings, block
+ * comments and docstrings keep their scope across lines. Returns one entry per
+ * input line, or undefined when the highlighter does not line up.
+ */
+function highlightBodies(bodies: string[], lang: string | undefined): string[] | undefined {
+  try {
+    const highlighted = highlightCode(bodies.join("\n"), lang);
+    return highlighted.length === bodies.length ? highlighted : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 type DiffEntry = { sign: "+" | "-" | " "; num: string; content: string; sep?: boolean };
@@ -257,6 +264,10 @@ function renderUpdateResult(diffText: string, lang: string | undefined, expanded
   const numWidth = Math.max(1, ...entries.filter((e) => !e.sep).map((e) => e.num.length));
   const pad = " ".repeat(DIFF_INDENT);
   const palette = diffPalette(theme);
+  // Highlight the rendered lines together, not one at a time.
+  const flat = shown.filter((e) => !e.sep);
+  const highlighted = highlightBodies(flat.map((e) => tabs(e.content)), lang);
+  let bodyIndex = 0;
   for (let k = 0; k < shown.length; k++) {
     const e = shown[k];
     if (e.sep) {
@@ -264,6 +275,7 @@ function renderUpdateResult(diffText: string, lang: string | undefined, expanded
       continue;
     }
     const num = e.num.padStart(numWidth);
+    const bodyIndexHere = bodyIndex++;
     if (e.sign === " ") {
       // 4 spaces after the number = num + space + sign + 2 spaces on change
       // rows, so +/- doesn't shift content relative to context lines.
@@ -280,7 +292,9 @@ function renderUpdateResult(diffText: string, lang: string | undefined, expanded
         : at(k + 1) !== "+" && at(k - 1) === "-" && at(k - 2) !== "-";
     const lineBg = isDel ? palette.delLineBg : palette.addLineBg;
     const content = tabs(e.content);
-    let body = highlightLine(content, lang, lineBg);
+    let body = highlighted?.[bodyIndexHere] ?? content;
+    // A highlighter reset would end the band early; re-emit it after each one.
+    if (lineBg) body = paintOn(body, lineBg);
     if (paired) {
       const other = tabs((isDel ? shown[k + 1] : shown[k - 1]).content);
       const wd = diffTokens(tokenizeWords(isDel ? content : other), tokenizeWords(isDel ? other : content));
