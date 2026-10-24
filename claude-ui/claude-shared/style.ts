@@ -7,6 +7,7 @@
 // try to load it as an extension — only top-level *.ts and */index.ts files are
 // treated as extension entry points.
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { keyHint } from "@earendil-works/pi-coding-agent";
 
 // ============================================================================
 // Palette (truecolor, matching Claude Code's diff theme)
@@ -67,7 +68,7 @@ export const link = (s: string) => DASHED_UNDERLINE + s + C.reset;
 
 /** Bash/listing body lines shown per tool row when collapsed. */
 export const COLLAPSED_BASH_LINES = 20;
-/** …and when expanded with ctrl+o. */
+/** …and when expanded with the app.tools.expand key. */
 export const EXPANDED_BASH_LINES = 500;
 /** Indent of result body lines under the `⎿` header. */
 export const DIFF_INDENT = 4;
@@ -236,7 +237,7 @@ export function renderStreamedOutput(result: any, options: any, context: any): L
     const rows: Row[] = [row(`${MUTED}⎿${C.reset}  failed${elapsedIn(state)}`)];
     for (const l of shown) rows.push(wrapRow(ERROR_FG + l + C.reset, DIFF_INDENT));
     if (remaining > 0) {
-      rows.push(wrapRow(`${MUTED}… +${remaining} more${C.reset}${MUTED} (ctrl+o to expand)${C.reset}`, DIFF_INDENT));
+      rows.push(wrapRow(`${MUTED}… +${remaining} more${C.reset} (${keyHint("app.tools.expand", "to expand")})`, DIFF_INDENT));
     }
     return new LinesComponent(rows);
   }
@@ -259,7 +260,7 @@ export function renderStreamedOutput(result: any, options: any, context: any): L
     const rows: Row[] = [row(`${MUTED}⎿${C.reset}  running…${dur}`)];
     for (const l of lines.slice(0, COLLAPSED_BASH_LINES)) rows.push(wrapRow(l, DIFF_INDENT));
     const hidden = lines.length - Math.min(lines.length, COLLAPSED_BASH_LINES);
-    if (hidden > 0) rows.push(wrapRow(`${MUTED}… +${hidden} more (ctrl+o to expand)${C.reset}`, DIFF_INDENT));
+    if (hidden > 0) rows.push(wrapRow(`${MUTED}… +${hidden} more${C.reset} (${keyHint("app.tools.expand", "to expand")})`, DIFF_INDENT));
     return new LinesComponent(rows);
   }
 
@@ -276,7 +277,7 @@ export function renderStreamedOutput(result: any, options: any, context: any): L
     rows.push(wrapRow(`${MUTED}[truncated — full output: ${details.fullOutputPath}]${C.reset}`, DIFF_INDENT));
   }
   if (remaining > 0) {
-    const note = options.expanded ? "output truncated" : "ctrl+o to expand";
+    const note = options.expanded ? "output truncated" : keyHint("app.tools.expand", "to expand");
     rows.push(wrapRow(`${MUTED}… +${remaining} more (${note})${C.reset}`, DIFF_INDENT));
   }
   return new LinesComponent(rows);

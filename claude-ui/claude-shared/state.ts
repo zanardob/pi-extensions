@@ -3,6 +3,6 @@
 // doesn't try to load it as an extension — only top-level *.ts and
 // */index.ts files are treated as extension entry points.
 export const claudeState = {
-  /** ctrl+o state for thinking blocks: false = one-line summary, true = full text. */
+  /** app.tools.expand state for thinking blocks: false = one-line summary, true = full text. */
   thinkingExpanded: false,
 };

@@ -52,9 +52,9 @@ class ClaudeEditor extends CustomEditor {
       typeof (this as any).keybindings?.matches === "function" &&
       (this as any).keybindings.matches(data, "app.tools.expand");
     if (isExpand) {
-      // ctrl+o also toggles thinking blocks: flip the shared flag, let pi's
-      // built-in tool-output toggle run via super, then invalidate the tree so
-      // assistant components rebuild and the thinking transformer re-runs.
+      // The expand key also toggles thinking blocks: flip the shared flag, let
+      // pi's built-in tool-output toggle run via super, then invalidate the tree
+      // so assistant components rebuild and the thinking transformer re-runs.
       claudeState.thinkingExpanded = !claudeState.thinkingExpanded;
     }
     super.handleInput(data);

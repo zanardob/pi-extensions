@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { getLanguageFromPath, highlightCode, type ToolRenderers } from "@earendil-works/pi-coding-agent";
+import { getLanguageFromPath, highlightCode, keyHint, type ToolRenderers } from "@earendil-works/pi-coding-agent";
 import { claudeState } from "./claude-shared/state.ts";
 import {
   C,
@@ -37,13 +37,13 @@ import {
 //   - Status dots: gray ● while running, green when done, red on error.
 //   - Assistant messages get a leading white circle (●), like Claude Code.
 //   - Only edit shows a diff — bash/read/write never do.
-//   - ctrl+o (app.tools.expand) gives every tool a meaningful expanded state:
+//   - the app.tools.expand key gives every tool a meaningful expanded state:
 //     bash 20 → 500 line cap, read shows the file content, edit shows the
 //     untrimmed diff. Collapsed views stay Claude-Code-style.
 // ============================================================================
 
 /** Bash call header shows the full command up to this many lines; longer
- *  commands collapse to the first line + hint (ctrl+o reveals everything). */
+ *  commands collapse to the first line + hint (the expand key reveals everything). */
 const BASH_CALL_MAX_LINES = 5;
 
 // ============================================================================
@@ -397,7 +397,7 @@ const RENDERERS: Record<string, Build> = {
       if (extra.length > 0) {
         if (cmdLines.length > BASH_CALL_MAX_LINES && !context.expanded) {
           // Long command: collapsed header shows just the first line.
-          rows.push(row(`       ${MUTED}… +${extra.length} lines (ctrl+o to expand)${C.reset}`));
+          rows.push(row(`       ${MUTED}… +${extra.length} lines${C.reset} (${keyHint("app.tools.expand", "to expand")})`));
         } else {
           for (const l of extra) rows.push(row("       " + l));
         }
@@ -433,7 +433,7 @@ const RENDERERS: Record<string, Build> = {
         return new LinesComponent([row(`${MUTED}⎿${C.reset}  ` + ERROR_FG + textOutput(result) + C.reset)]);
       }
       const lines = trimTrailingEmpty(textOutput(result).split("\n"));
-      // Expanded (ctrl+o): show the full content via the built-in renderer,
+      // Expanded: show the full content via the built-in renderer,
       // like pi does natively. Collapsed stays a one-line summary.
       if (lines.length === 0 || options.expanded) {
         return fallback?.renderResult?.(result, options, theme, context) ?? renderStreamedOutput(result, options, context);
@@ -543,10 +543,10 @@ export default function (pi: ExtensionAPI) {
   // markdown (fences, headings, quotes, lists, tables) are left untouched so
   // rendering doesn't break.
   pi.registerMarkdownTransformer((markdown, context) => {
-    // ctrl+o collapses thinking runs to a one-line summary (styled dim/italic
-    // by the built-in thinking renderer); expanded shows the full text.
+    // The expand key collapses thinking runs to a one-line summary (styled
+    // dim/italic by the built-in thinking renderer); expanded shows the text.
     if (context.messageType === "assistant-thinking") {
-      return claudeState.thinkingExpanded ? markdown : "· thinking… (ctrl+o to expand)";
+      return claudeState.thinkingExpanded ? markdown : `· thinking… (${keyHint("app.tools.expand", "to expand")})`;
     }
     if (context.messageType !== "assistant") return markdown;
     const lines = markdown.split("\n");
