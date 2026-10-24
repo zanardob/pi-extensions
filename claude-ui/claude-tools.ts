@@ -576,9 +576,13 @@ export default function (pi: ExtensionAPI) {
 
   // The expand key collapses thinking runs to a one-line summary (styled
   // dim/italic by the built-in thinking renderer); expanded shows the text.
+  // While the block is still streaming the expand hint would advertise a
+  // finished block, so it waits for the message to settle.
   // Assistant and user markers are drawn by claude-markers.ts.
   pi.registerMarkdownTransformer((markdown, context) => {
     if (context.messageType !== "assistant-thinking") return markdown;
-    return claudeState.thinkingExpanded ? markdown : `· thinking… (${keyHint("app.tools.expand", "to expand")})`;
+    if (claudeState.thinkingExpanded) return markdown;
+    if (context.isStreaming) return "· thinking…";
+    return `· thinking… (${keyHint("app.tools.expand", "to expand")})`;
   });
 }
