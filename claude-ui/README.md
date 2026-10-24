@@ -1,7 +1,7 @@
 # claude-ui
 
 Claude-style terminal UI for Pi: editor, footer, tool rendering, and themes.
-Loaded as a single extension (`index.ts`) that composes five feature modules.
+Loaded as a single extension (`index.ts`) that composes six feature modules.
 
 | File | Purpose |
 |------|---------|
@@ -11,6 +11,7 @@ Loaded as a single extension (`index.ts`) that composes five feature modules.
 | `claude-tools.ts` | Claude-style rendering for the built-in tools (read, edit, bash, …), plus file-tool guidelines |
 | `claude-uniform.ts` | Uniform tool-call rows for every other tool |
 | `claude-markers.ts` | ● on assistant text and ❯ on the prompt, drawn over pi's own message components |
+| `claude-working.ts` | Phase, elapsed time and output tokens in the working row above the editor |
 | `claude-shared/` | Shared state and styling helpers |
 | `themes/` | `claude-light` and `claude-dark` |
 
