@@ -86,9 +86,13 @@ function diffTokens(a: string[], b: string[]): { t: string; k: 0 | 1 | 2 }[] {
   return out;
 }
 
+/** Character span, [start, end), on one side of a word diff. */
+type Span = { start: number; end: number };
+
 /** Raw char offsets of changed tokens on one side of the diff. */
-function spansFor(tokens: { t: string; k: 0 | 1 | 2 }[], kind: 1 | 2): { start: number; end: number }[] {
-  const spans: { start: number; end: number }[] = [];
+function spansFor(tokens: { t: string; k: 0 | 1 | 2 }[], kind: 1 | 2): Span[] {
+  const spans: Span[] = [];
+  let text = "";
   let pos = 0;
   let start = -1;
   for (const p of tokens) {
@@ -98,10 +102,69 @@ function spansFor(tokens: { t: string; k: 0 | 1 | 2 }[], kind: 1 | 2): { start: 
       spans.push({ start, end: pos });
       start = -1;
     }
-    if (p.k === 0 || p.k === kind) pos += p.t.length;
+    if (p.k === 0 || p.k === kind) {
+      text += p.t;
+      pos += p.t.length;
+    }
   }
   if (start >= 0) spans.push({ start, end: pos });
-  return spans;
+  return mergeSpanGaps(spans, text);
+}
+
+/** Merge spans separated only by whitespace, so a changed run reads as one mark. */
+function mergeSpanGaps(spans: Span[], text: string): Span[] {
+  const out: Span[] = [];
+  for (const span of spans) {
+    const last = out[out.length - 1];
+    if (last && text.slice(last.end, span.start).trim() === "") last.end = span.end;
+    else out.push({ ...span });
+  }
+  return out;
+}
+
+/**
+ * Pairs each removed line with the line that replaced it: a run of `-` lines is
+ * matched line by line with the `+` run right after it, so a multi-line rewrite
+ * still gets word-level marks. Pairs that share too little text are dropped —
+ * highlighting unrelated lines is all noise.
+ */
+function pairWordDiffs(entries: DiffEntry[]): Map<DiffEntry, { before: Span[]; after: Span[] }> {
+  const pairs = new Map<DiffEntry, { before: Span[]; after: Span[] }>();
+  for (let i = 0; i < entries.length; ) {
+    if (entries[i].sign !== "-") {
+      i++;
+      continue;
+    }
+    let removedEnd = i;
+    while (removedEnd < entries.length && entries[removedEnd].sign === "-") removedEnd++;
+    let addedEnd = removedEnd;
+    while (addedEnd < entries.length && entries[addedEnd].sign === "+") addedEnd++;
+    for (let k = 0; k < Math.min(removedEnd - i, addedEnd - removedEnd); k++) {
+      const before = entries[i + k];
+      const after = entries[removedEnd + k];
+      const spans = wordDiff(tabs(before.content), tabs(after.content));
+      if (!spans) continue;
+      pairs.set(before, { before: spans.removed, after: spans.added });
+      pairs.set(after, { before: spans.removed, after: spans.added });
+    }
+    i = addedEnd;
+  }
+  return pairs;
+}
+
+/** Changes below this share of the longer line are not worth marking. */
+const WORD_DIFF_MIN_SHARED = 0.3;
+/** Above this length the O(n·m) word diff costs more than it is worth. */
+const WORD_DIFF_MAX_CHARS = 2000;
+
+/** Changed words on both sides of a replaced line, or undefined when the pair is too unlike. */
+function wordDiff(before: string, after: string): { removed: Span[]; added: Span[] } | undefined {
+  if (before.length > WORD_DIFF_MAX_CHARS || after.length > WORD_DIFF_MAX_CHARS) return undefined;
+  const tokens = diffTokens(tokenizeWords(before), tokenizeWords(after));
+  let shared = 0;
+  for (const t of tokens) if (t.k === 0) shared += t.t.trim().length;
+  if (shared < WORD_DIFF_MIN_SHARED * Math.max(before.trim().length, after.trim().length)) return undefined;
+  return { removed: spansFor(tokens, 1), added: spansFor(tokens, 2) };
 }
 
 /** Add an extra background over `spans` inside an already-styled string. */
@@ -158,6 +221,9 @@ function highlightBodies(bodies: string[], lang: string | undefined): string[] |
 
 type DiffEntry = { sign: "+" | "-" | " "; num: string; content: string; sep?: boolean };
 
+/** Tabs are expanded before measuring, highlighting and word-diffing a line. */
+const tabs = (s: string) => s.replace(/\t/g, "   ");
+
 const parseDiffLine = (line: string): DiffEntry | null => {
   const m = line.match(/^([+-\s])(\s*\d*)\s(.*)$/);
   if (!m) return null;
@@ -175,7 +241,6 @@ const CONTEXT_LINES = 3;
  * hunks. Expanded shows the diff untrimmed.
  */
 function renderUpdateResult(diffText: string, lang: string | undefined, expanded: boolean, theme: any): Row[] {
-  const tabs = (s: string) => s.replace(/\t/g, "   ");
   const entries: DiffEntry[] = [];
   for (const line of diffText.split("\n")) {
     const parsed = parseDiffLine(line);
@@ -267,6 +332,7 @@ function renderUpdateResult(diffText: string, lang: string | undefined, expanded
   // Highlight the rendered lines together, not one at a time.
   const flat = shown.filter((e) => !e.sep);
   const highlighted = highlightBodies(flat.map((e) => tabs(e.content)), lang);
+  const wordSpans = pairWordDiffs(entries);
   let bodyIndex = 0;
   for (let k = 0; k < shown.length; k++) {
     const e = shown[k];
@@ -283,22 +349,14 @@ function renderUpdateResult(diffText: string, lang: string | undefined, expanded
       continue;
     }
     const isDel = e.sign === "-";
-    const at = (n: number) => shown[n] && !shown[n].sep && shown[n].sign;
-    // Word-diff only for a single removed line directly followed by a single
-    // added line (same pairing rule as before).
-    const paired =
-      isDel
-        ? at(k - 1) !== "-" && at(k + 1) === "+" && at(k + 2) !== "+"
-        : at(k + 1) !== "+" && at(k - 1) === "-" && at(k - 2) !== "-";
     const lineBg = isDel ? palette.delLineBg : palette.addLineBg;
     const content = tabs(e.content);
     let body = highlighted?.[bodyIndexHere] ?? content;
     // A highlighter reset would end the band early; re-emit it after each one.
     if (lineBg) body = paintOn(body, lineBg);
-    if (paired) {
-      const other = tabs((isDel ? shown[k + 1] : shown[k - 1]).content);
-      const wd = diffTokens(tokenizeWords(isDel ? content : other), tokenizeWords(isDel ? other : content));
-      body = injectWordBg(body, spansFor(wd, isDel ? 1 : 2), isDel ? palette.delWordBg : palette.addWordBg, lineBg);
+    const spans = wordSpans.get(e);
+    if (spans) {
+      body = injectWordBg(body, isDel ? spans.before : spans.after, isDel ? palette.delWordBg : palette.addWordBg, lineBg);
     }
     // The gutter carries the add/remove color; the body keeps the syntax colors
     // of the active theme.
