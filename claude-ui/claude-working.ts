@@ -23,10 +23,63 @@ const UNDIM = "\x1b[22m";
 const FRAMES = ["·", "✢", "✱", "✶", "✻", "✽", "✻", "✶", "✱", "✢"].map((frame) => `${ORANGE}${frame}${C.reset}`);
 const FRAME_MS = 120;
 const TICK_MS = 1000;
-/** Longer phases wrap the row onto a second line, which shifts the editor. */
-const PHASE_MAX = 40;
 /** Tokens per character of streamed text, for the live estimate. */
 const CHARS_PER_TOKEN = 4;
+/** Longer phases wrap the row onto a second line, which shifts the editor. */
+const PHASE_MAX = 40;
+/** Claude Code's spinner verbs (`constants/spinnerVerbs.ts`), minus the ones branded
+ *  after Claude itself. One is picked per run, the way Claude Code picks it per mount. */
+const VERBS = [
+  "Accomplishing", "Actioning", "Actualizing", "Architecting",
+  "Baking", "Beaming", "Beboppin'", "Befuddling",
+  "Billowing", "Blanching", "Bloviating", "Boogieing",
+  "Boondoggling", "Booping", "Bootstrapping", "Brewing",
+  "Bunning", "Burrowing", "Calculating", "Canoodling",
+  "Caramelizing", "Cascading", "Catapulting", "Cerebrating",
+  "Channeling", "Channelling", "Choreographing", "Churning",
+  "Coalescing", "Cogitating", "Combobulating", "Composing",
+  "Computing", "Concocting", "Considering", "Contemplating",
+  "Cooking", "Crafting", "Creating", "Crunching",
+  "Crystallizing", "Cultivating", "Deciphering", "Deliberating",
+  "Determining", "Dilly-dallying", "Discombobulating", "Doing",
+  "Doodling", "Drizzling", "Ebbing", "Effecting",
+  "Elucidating", "Embellishing", "Enchanting", "Envisioning",
+  "Evaporating", "Fermenting", "Fiddle-faddling", "Finagling",
+  "Flambéing", "Flibbertigibbeting", "Flowing", "Flummoxing",
+  "Fluttering", "Forging", "Forming", "Frolicking",
+  "Frosting", "Gallivanting", "Galloping", "Garnishing",
+  "Generating", "Gesticulating", "Germinating", "Gitifying",
+  "Grooving", "Gusting", "Harmonizing", "Hashing",
+  "Hatching", "Herding", "Honking", "Hullaballooing",
+  "Hyperspacing", "Ideating", "Imagining", "Improvising",
+  "Incubating", "Inferring", "Infusing", "Ionizing",
+  "Jitterbugging", "Julienning", "Kneading", "Leavening",
+  "Levitating", "Lollygagging", "Manifesting", "Marinating",
+  "Meandering", "Metamorphosing", "Misting", "Moonwalking",
+  "Moseying", "Mulling", "Mustering", "Musing",
+  "Nebulizing", "Nesting", "Newspapering", "Noodling",
+  "Nucleating", "Orbiting", "Orchestrating", "Osmosing",
+  "Perambulating", "Percolating", "Perusing", "Philosophising",
+  "Photosynthesizing", "Pollinating", "Pondering", "Pontificating",
+  "Pouncing", "Precipitating", "Prestidigitating", "Processing",
+  "Proofing", "Propagating", "Puttering", "Puzzling",
+  "Quantumizing", "Razzle-dazzling", "Razzmatazzing", "Recombobulating",
+  "Reticulating", "Roosting", "Ruminating", "Sautéing",
+  "Scampering", "Schlepping", "Scurrying", "Seasoning",
+  "Shenaniganing", "Shimmying", "Simmering", "Skedaddling",
+  "Sketching", "Slithering", "Smooshing", "Sock-hopping",
+  "Spelunking", "Spinning", "Sprouting", "Stewing",
+  "Sublimating", "Swirling", "Swooping", "Symbioting",
+  "Synthesizing", "Tempering", "Thinking", "Thundering",
+  "Tinkering", "Tomfoolering", "Topsy-turvying", "Transfiguring",
+  "Transmuting", "Twisting", "Undulating", "Unfurling",
+  "Unravelling", "Vibing", "Waddling", "Wandering",
+  "Warping", "Whatchamacalliting", "Whirlpooling", "Whirring",
+  "Whisking", "Wibbling", "Working", "Wrangling",
+  "Zesting", "Zigzagging",
+];
+
+const pickVerb = (): string => VERBS[Math.floor(Math.random() * VERBS.length)] ?? "Working";
 
 /** Trims to `PHASE_MAX` once the message's trailing ellipsis is added. */
 const clip = (text: string): string => (text.length > PHASE_MAX - 1 ? text.slice(0, PHASE_MAX - 1) : text);
@@ -70,7 +123,9 @@ export default function (pi: ExtensionAPI) {
   let streamed = 0;
   /** Tokens shown so far in this message: the estimate must not walk back while it streams. */
   let shown = 0;
-  let phase = "Thinking";
+  /** The verb for this run's thinking phases; Claude Code picks one per mount too. */
+  let verb = pickVerb();
+  let phase = verb;
   let timer: ReturnType<typeof setInterval> | undefined;
 
   const active = (ctx: { hasUI: boolean; mode: string }): boolean => ctx.hasUI && ctx.mode === "tui";
@@ -97,7 +152,8 @@ export default function (pi: ExtensionAPI) {
     tokens = 0;
     streamed = 0;
     shown = 0;
-    phase = "Thinking";
+    verb = pickVerb();
+    phase = verb;
     show(ctx);
     stop();
     timer = setInterval(() => show(ctx), TICK_MS);
@@ -108,7 +164,7 @@ export default function (pi: ExtensionAPI) {
     if (!active(ctx) || event.message.role !== "assistant") return;
     const content = (event.message as any).content ?? [];
     const last = content[content.length - 1];
-    phase = last?.type === "text" ? "Responding" : last?.type === "toolCall" ? "Preparing a tool call" : "Thinking";
+    phase = last?.type === "text" ? "Responding" : last?.type === "toolCall" ? "Preparing a tool call" : verb;
     streamed = content.reduce((sum: number, part: any) => sum + (part.text?.length ?? part.thinking?.length ?? 0), 0);
   });
 
@@ -129,7 +185,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("tool_execution_end", (_event, ctx) => {
     if (!active(ctx)) return;
-    phase = "Thinking";
+    phase = verb;
   });
 
   pi.on("agent_end", (_event, ctx) => {
