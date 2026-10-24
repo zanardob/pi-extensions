@@ -44,7 +44,7 @@ function uniformRenderers(name: string): ToolRenderers {
     renderCall(args, _theme, context) {
       startTiming(context);
       const summary = formatToolArgs(args);
-      return new LinesComponent([row(`${dotFor(context)} ${bold(name)}(${summary})`)]);
+      return new LinesComponent([row(`${dotFor(context)} ${bold(name)}(${summary})`)], context.outputPad);
     },
     // Same body as the shell/listing tools: streaming header while running,
     // `⎿ done in 1.2s (12 lines)` once settled, capped + indented output.

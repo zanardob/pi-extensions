@@ -421,7 +421,7 @@ const RENDERERS: Record<string, Build> = {
           for (const l of extra) rows.push(row("       " + l));
         }
       }
-      return new LinesComponent(rows);
+      return new LinesComponent(rows, context.outputPad);
     },
     renderResult(result: any, options: any, _theme: any, context: any) {
       // Streaming header, `done in 1.2s (12 lines)` header, body cap, and the
@@ -445,11 +445,11 @@ const RENDERERS: Record<string, Build> = {
           : args?.offset !== undefined
             ? theme.fg("muted", `:${start}`)
             : "";
-      return new LinesComponent([row(`${dotFor(context)} ${bold("read")}(${link(display)})${range}`)]);
+      return new LinesComponent([row(`${dotFor(context)} ${bold("read")}(${link(display)})${range}`)], context.outputPad);
     },
     renderResult(result: any, options: any, theme: any, context: any) {
       if (context.isError) {
-        return new LinesComponent([row(`${MUTED}⎿${C.reset}  ` + ERROR_FG + textOutput(result) + C.reset)]);
+        return new LinesComponent([row(`${MUTED}⎿${C.reset}  ` + ERROR_FG + textOutput(result) + C.reset)], context.outputPad);
       }
       const lines = trimTrailingEmpty(textOutput(result).split("\n"));
       // Expanded: show the full content via the built-in renderer,
@@ -458,7 +458,7 @@ const RENDERERS: Record<string, Build> = {
         return fallback?.renderResult?.(result, options, theme, context) ?? renderStreamedOutput(result, options, context);
       }
       const suffix = result?.details?.truncation?.truncated ? " (truncated)" : "";
-      return new LinesComponent([row(`${MUTED}⎿${C.reset}  Read ${lines.length} ${lines.length === 1 ? "line" : "lines"}${suffix}`)]);
+      return new LinesComponent([row(`${MUTED}⎿${C.reset}  Read ${lines.length} ${lines.length === 1 ? "line" : "lines"}${suffix}`)], context.outputPad);
     },
   }),
 
@@ -469,13 +469,13 @@ const RENDERERS: Record<string, Build> = {
     renderCall(args: any, theme: any, context: any) {
       const p = typeof args?.path === "string" ? args.path : typeof args?.file_path === "string" ? args.file_path : "";
       const display = p ? relativePath(p, context.cwd) : theme.fg("toolOutput", "...");
-      return new LinesComponent([row(`${dotFor(context)} ${bold("write")}(${link(display)})`)]);
+      return new LinesComponent([row(`${dotFor(context)} ${bold("write")}(${link(display)})`)], context.outputPad);
     },
     renderResult(result: any, _options: any, theme: any, context: any) {
       if (context.isError) {
-        return new LinesComponent([row(`${MUTED}⎿${C.reset}  ` + ERROR_FG + textOutput(result) + C.reset)]);
+        return new LinesComponent([row(`${MUTED}⎿${C.reset}  ` + ERROR_FG + textOutput(result) + C.reset)], context.outputPad);
       }
-      return new LinesComponent([row(`${MUTED}⎿${C.reset}  Written`)]);
+      return new LinesComponent([row(`${MUTED}⎿${C.reset}  Written`)], context.outputPad);
     },
   }),
 
@@ -486,7 +486,7 @@ const RENDERERS: Record<string, Build> = {
     renderCall(args: any, theme: any, context: any) {
       const p = typeof args?.path === "string" ? args.path : typeof args?.file_path === "string" ? args.file_path : "";
       const display = p ? relativePath(p, context.cwd) : theme.fg("toolOutput", "...");
-      return new LinesComponent([row(`${dotFor(context)} ${bold("edit")}(${link(display)})`)]);
+      return new LinesComponent([row(`${dotFor(context)} ${bold("edit")}(${link(display)})`)], context.outputPad);
     },
     renderResult(result: any, options: any, theme: any, context: any) {
       const diff = !context.isError ? (result?.details?.diff as string | undefined) : undefined;
@@ -498,7 +498,7 @@ const RENDERERS: Record<string, Build> = {
       }
       // rows[0] is the summary line; the rest is the diff itself.
       const over = rows.length - 1 - DIFF_PREVIEW_LINES;
-      if (options.expanded || over <= 0) return new LinesComponent(rows);
+      if (options.expanded || over <= 0) return new LinesComponent(rows, context.outputPad);
       const shownRows = rows.slice(0, 1 + DIFF_PREVIEW_LINES);
       shownRows.push(
         row(
@@ -506,7 +506,7 @@ const RENDERERS: Record<string, Build> = {
             `${MUTED}… +${over} ${over === 1 ? "line" : "lines"}${C.reset} (${keyHint("app.tools.expand", "to expand")})`,
         ),
       );
-      return new LinesComponent(shownRows);
+      return new LinesComponent(shownRows, context.outputPad);
     },
   }),
 
@@ -522,7 +522,7 @@ const RENDERERS: Record<string, Build> = {
       const glob = typeof args?.glob === "string" && args.glob ? `${MUTED} (${args.glob})${C.reset}` : "";
       const limit = args?.limit !== undefined ? `${MUTED} limit ${args.limit}${C.reset}` : "";
       const call = `${bold("grep")}(${link(`/${pattern}/`)}${MUTED} in ${C.reset}${listingPath(args?.path, context.cwd, ".")}${glob}${limit})`;
-      return new LinesComponent([row(`${dotFor(context)} ${call}`)]);
+      return new LinesComponent([row(`${dotFor(context)} ${call}`)], context.outputPad);
     },
     renderResult(result: any, options: any, _theme: any, context: any) {
       return renderStreamedOutput(result, options, context);
@@ -536,7 +536,7 @@ const RENDERERS: Record<string, Build> = {
       const pattern = typeof args?.pattern === "string" ? args.pattern : "";
       const limit = args?.limit !== undefined ? `${MUTED} (limit ${args.limit})${C.reset}` : "";
       const call = `${bold("find")}(${link(pattern)}${MUTED} in ${C.reset}${listingPath(args?.path, context.cwd, ".")}${limit})`;
-      return new LinesComponent([row(`${dotFor(context)} ${call}`)]);
+      return new LinesComponent([row(`${dotFor(context)} ${call}`)], context.outputPad);
     },
     renderResult(result: any, options: any, _theme: any, context: any) {
       return renderStreamedOutput(result, options, context);
@@ -549,7 +549,7 @@ const RENDERERS: Record<string, Build> = {
       startTiming(context);
       const limit = args?.limit !== undefined ? `${MUTED} (limit ${args.limit})${C.reset}` : "";
       const call = `${bold("ls")}(${listingPath(args?.path, context.cwd, ".")})${limit}`;
-      return new LinesComponent([row(`${dotFor(context)} ${call}`)]);
+      return new LinesComponent([row(`${dotFor(context)} ${call}`)], context.outputPad);
     },
     renderResult(result: any, options: any, _theme: any, context: any) {
       return renderStreamedOutput(result, options, context);

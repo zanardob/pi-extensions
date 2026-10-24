@@ -94,10 +94,13 @@ export const wrapRow = (content: string, indent: number): Row => ({
   wrapIndent: indent,
 });
 
-function renderRow(text: string, width: number, bg: string | null): string {
+/** Horizontal padding pi asks a self-rendering tool to apply (outputPad setting). */
+const padOf = (outputPad: number | undefined): number => (outputPad === 0 ? 0 : 1);
+
+function renderRow(text: string, width: number, bg: string | null, pad: number): string {
   // Always truncate to the terminal width — Pi throws on overwide lines.
-  const clipped = truncateToWidth(text, Math.max(1, width - 1));
-  const line = " " + clipped;
+  const clipped = truncateToWidth(text, Math.max(1, width - pad));
+  const line = " ".repeat(pad) + clipped;
   if (!bg) return line;
   const vis = visibleWidth(line);
   if (vis >= width) return line;
@@ -107,27 +110,29 @@ function renderRow(text: string, width: number, bg: string | null): string {
 /** Component that renders pre-styled rows, padding bg rows to full width. */
 export class LinesComponent {
   rows: Row[];
-  constructor(rows: Row[]) {
+  private pad: number;
+  /** `outputPad` comes from the render context: renderShell "self" bypasses
+   *  pi's own padding, so the gutter has to match the setting itself. */
+  constructor(rows: Row[], outputPad?: number) {
     this.rows = rows;
+    this.pad = padOf(outputPad);
   }
   render(width: number): string[] {
-    // 1-column gutter keeps rows aligned with assistant text (outputPad=1)
-    // since renderShell "self" bypasses the default padded Box.
     const out: string[] = [];
     for (const r of this.rows) {
       if (r.wrapIndent === undefined) {
-        out.push(renderRow(r.text, width, r.bg));
+        out.push(renderRow(r.text, width, r.bg, this.pad));
         continue;
       }
       // Wrap the content without its indent and re-add the indent to every
       // line: wrapping the indented text gives continuation lines the full
       // width, which then overflows once the indent is re-applied.
-      // width - 2 leaves one column for the leading gutter and one so a
-      // wrapped line plus its gutter still fits what renderRow allows.
+      // width - pad - 1 leaves the gutter and one spare column so a wrapped
+      // line plus its gutter still fits what renderRow allows.
       const indent = r.wrapIndent;
-      const pieces = wrapTextWithAnsi(r.text.slice(indent), Math.max(1, width - 2 - indent));
+      const pieces = wrapTextWithAnsi(r.text.slice(indent), Math.max(1, width - this.pad - 1 - indent));
       for (const piece of pieces) {
-        out.push(renderRow(" ".repeat(indent) + piece, width, r.bg));
+        out.push(renderRow(" ".repeat(indent) + piece, width, r.bg, this.pad));
       }
     }
     return out;
@@ -239,7 +244,7 @@ export function renderStreamedOutput(result: any, options: any, context: any): L
     if (remaining > 0) {
       rows.push(wrapRow(`${MUTED}… +${remaining} more${C.reset} (${keyHint("app.tools.expand", "to expand")})`, DIFF_INDENT));
     }
-    return new LinesComponent(rows);
+    return new LinesComponent(rows, context.outputPad);
   }
 
   let output = textOutput(result);
@@ -261,7 +266,7 @@ export function renderStreamedOutput(result: any, options: any, context: any): L
     for (const l of lines.slice(0, COLLAPSED_BASH_LINES)) rows.push(wrapRow(l, DIFF_INDENT));
     const hidden = lines.length - Math.min(lines.length, COLLAPSED_BASH_LINES);
     if (hidden > 0) rows.push(wrapRow(`${MUTED}… +${hidden} more${C.reset} (${keyHint("app.tools.expand", "to expand")})`, DIFF_INDENT));
-    return new LinesComponent(rows);
+    return new LinesComponent(rows, context.outputPad);
   }
 
   const total = lines.length;
@@ -280,7 +285,7 @@ export function renderStreamedOutput(result: any, options: any, context: any): L
     const note = options.expanded ? "output truncated" : keyHint("app.tools.expand", "to expand");
     rows.push(wrapRow(`${MUTED}… +${remaining} more (${note})${C.reset}`, DIFF_INDENT));
   }
-  return new LinesComponent(rows);
+  return new LinesComponent(rows, context.outputPad);
 }
 
 // ============================================================================
