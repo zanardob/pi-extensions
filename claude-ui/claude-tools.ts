@@ -10,8 +10,10 @@ import {
   MUTED,
   type Row,
   bold,
+  diffPalette,
   dotFor,
   link,
+  paintOn,
   relativePath,
   renderStreamedOutput,
   row,
@@ -141,11 +143,10 @@ function injectWordBg(styled: string, spans: { start: number; end: number }[], w
 }
 
 function highlightLine(content: string, lang: string | undefined, lineBg: string | null): string {
-  let styled = (highlightCode(content, lang) ?? [content])[0] ?? content;
+  const styled = (highlightCode(content, lang) ?? [content])[0] ?? content;
   // A full reset inside the highlighter would also kill the line background;
   // re-emit it right after so the tint survives.
-  if (lineBg) styled = styled.replace(/\x1b\[0m/g, "\x1b[0m" + lineBg);
-  return styled;
+  return lineBg ? paintOn(styled, lineBg) : styled;
 }
 
 type DiffEntry = { sign: "+" | "-" | " "; num: string; content: string; sep?: boolean };
@@ -166,7 +167,7 @@ const CONTEXT_LINES = 3;
  * only) up to 3 context lines around each change with `...` between distant
  * hunks. Expanded shows the diff untrimmed.
  */
-function renderUpdateResult(diffText: string, lang: string | undefined, expanded: boolean): Row[] {
+function renderUpdateResult(diffText: string, lang: string | undefined, expanded: boolean, theme: any): Row[] {
   const tabs = (s: string) => s.replace(/\t/g, "   ");
   const entries: DiffEntry[] = [];
   for (const line of diffText.split("\n")) {
@@ -255,6 +256,7 @@ function renderUpdateResult(diffText: string, lang: string | undefined, expanded
 
   const numWidth = Math.max(1, ...entries.filter((e) => !e.sep).map((e) => e.num.length));
   const pad = " ".repeat(DIFF_INDENT);
+  const palette = diffPalette(theme);
   for (let k = 0; k < shown.length; k++) {
     const e = shown[k];
     if (e.sep) {
@@ -265,7 +267,7 @@ function renderUpdateResult(diffText: string, lang: string | undefined, expanded
     if (e.sign === " ") {
       // 4 spaces after the number = num + space + sign + 2 spaces on change
       // rows, so +/- doesn't shift content relative to context lines.
-      rows.push(row(pad + CTX_NUM_FG + num + "    " + C.ctxFg + tabs(e.content) + C.reset));
+      rows.push(row(pad + CTX_NUM_FG + num + "    " + theme.fg("toolDiffContext", tabs(e.content)) + C.reset));
       continue;
     }
     const isDel = e.sign === "-";
@@ -276,16 +278,18 @@ function renderUpdateResult(diffText: string, lang: string | undefined, expanded
       isDel
         ? at(k - 1) !== "-" && at(k + 1) === "+" && at(k + 2) !== "+"
         : at(k + 1) !== "+" && at(k - 1) === "-" && at(k - 2) !== "-";
-    const lineBg = isDel ? C.delLineBg : C.addLineBg;
-    const fg = isDel ? C.delFg : C.addFg;
+    const lineBg = isDel ? palette.delLineBg : palette.addLineBg;
     const content = tabs(e.content);
     let body = highlightLine(content, lang, lineBg);
     if (paired) {
       const other = tabs((isDel ? shown[k + 1] : shown[k - 1]).content);
       const wd = diffTokens(tokenizeWords(isDel ? content : other), tokenizeWords(isDel ? other : content));
-      body = injectWordBg(body, spansFor(wd, isDel ? 1 : 2), isDel ? C.delWordBg : C.addWordBg, lineBg);
+      body = injectWordBg(body, spansFor(wd, isDel ? 1 : 2), isDel ? palette.delWordBg : palette.addWordBg, lineBg);
     }
-    rows.push({ text: lineBg + fg + pad + `${num} ${e.sign}  ` + body + C.reset, bg: lineBg });
+    // The gutter carries the add/remove color; the body keeps the syntax colors
+    // of the active theme.
+    const gutter = paintOn(theme.fg(isDel ? "toolDiffRemoved" : "toolDiffAdded", pad + `${num} ${e.sign}  `), lineBg);
+    rows.push({ text: lineBg + gutter + body + C.reset, bg: lineBg });
   }
   return rows;
 }
@@ -397,7 +401,7 @@ const RENDERERS: Record<string, Build> = {
       const diff = !context.isError ? (result?.details?.diff as string | undefined) : undefined;
       const path = context.args?.path ?? context.args?.file_path;
       const lang = typeof path === "string" ? getLanguageFromPath(path) : undefined;
-      const rows = diff ? renderUpdateResult(diff, lang, options.expanded === true) : [];
+      const rows = diff ? renderUpdateResult(diff, lang, options.expanded === true, theme) : [];
       if (rows.length === 0) {
         return fallback?.renderResult?.(result, options, theme, context) ?? renderStreamedOutput(result, options, context);
       }

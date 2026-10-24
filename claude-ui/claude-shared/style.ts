@@ -9,17 +9,43 @@
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 
 // ============================================================================
-// Palette (truecolor, matching Claude Code's light diff theme)
+// Palette (truecolor, matching Claude Code's diff theme)
 // ============================================================================
 
-export const C = {
+// Only the full-line bands and the word-level bands need truecolor: no theme
+// token carries a diff background. Everything else comes from the active theme
+// so the rows follow it, dark or light.
+export type DiffPalette = {
+  addLineBg: string;
+  addWordBg: string;
+  delLineBg: string;
+  delWordBg: string;
+};
+
+const LIGHT_DIFF: DiffPalette = {
   addLineBg: "\x1b[48;2;220;255;220m",
   addWordBg: "\x1b[48;2;178;255;178m",
-  addFg: "\x1b[38;2;36;138;61m",
   delLineBg: "\x1b[48;2;255;220;220m",
   delWordBg: "\x1b[48;2;255;199;199m",
-  delFg: "\x1b[38;2;207;34;46m",
-  ctxFg: "\x1b[38;2;51;51;51m",
+};
+
+// Claude Code's dark theme: deep green and red bands, brightened enough that
+// syntax colors stay readable on top of them.
+const DARK_DIFF: DiffPalette = {
+  addLineBg: "\x1b[48;2;13;46;16m",
+  addWordBg: "\x1b[48;2;31;95;38m",
+  delLineBg: "\x1b[48;2;63;12;16m",
+  delWordBg: "\x1b[48;2;122;30;36m",
+};
+
+export const diffPalette = (theme: { appearance?: string } | undefined): DiffPalette =>
+  theme?.appearance === "dark" ? DARK_DIFF : LIGHT_DIFF;
+
+/** Re-emit a line background after any full reset in `styled`, so a highlighter
+ *  or theme reset cannot end the band early. */
+export const paintOn = (styled: string, bg: string): string => styled.replace(/\x1b\[0m/g, "\x1b[0m" + bg);
+
+export const C = {
   reset: "\x1b[0m",
 };
 
